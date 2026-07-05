@@ -1,0 +1,715 @@
+use crate::api;
+use crate::models::{
+    normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
+    HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryInput, LibraryLatestPayload,
+    LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary, PlayResult,
+    PlaybackControlInput, PlaybackStateInput, PlaybackStateResult, ReportPlaybackProgressInput,
+    ReportPlaybackStartInput, ReportPlaybackStoppedInput, SaveServerInput, SaveSettingsInput,
+    SavedServer, SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
+};
+use crate::mpv;
+use crate::store;
+use std::thread;
+use std::time::Duration;
+use tauri::AppHandle;
+
+#[tauri::command]
+pub(crate) async fn test_server_login(input: LoginInput) -> Result<LoginResult, String> {
+    tauri::async_runtime::spawn_blocking(move || test_server_login_sync(input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn test_server_login_sync(input: LoginInput) -> Result<LoginResult, String> {
+    let url = api::normalize_server_url(&input.url)?;
+    let client = api::http_client(input.use_system_proxy)?;
+    let auth = api::authenticate_by_name(
+        &client,
+        &url,
+        &input.server_type,
+        input.username.trim(),
+        &input.password,
+    )?;
+    let public_name = if input.name.trim().is_empty() {
+        let public_info = api::fetch_server_public_info(&client, &url).unwrap_or_default();
+        public_info
+            .server_name
+            .or(public_info.product_name)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let username = auth
+        .user
+        .name
+        .unwrap_or_else(|| input.username.trim().to_string());
+    Ok(LoginResult {
+        id: api::server_id(&url, &auth.user.id),
+        name: api::clean_name(&input.name, &public_name, &url),
+        url,
+        username,
+        user_id: auth.user.id,
+        access_token: auth.access_token,
+        use_system_proxy: input.use_system_proxy,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn save_server(
+    app: AppHandle,
+    input: SaveServerInput,
+) -> Result<SavedServerSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || save_server_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn save_server_sync(app: AppHandle, input: SaveServerInput) -> Result<SavedServerSummary, String> {
+    let saved = SavedServer {
+        id: input.id,
+        name: input.name,
+        url: api::normalize_server_url(&input.url)?,
+        username: input.username,
+        user_id: input.user_id,
+        access_token: input.access_token,
+        active: true,
+        saved_at: store::unix_now(),
+        use_system_proxy: input.use_system_proxy,
+    };
+    store::save_server(&app, saved)
+}
+
+#[tauri::command]
+pub(crate) async fn list_servers(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> {
+    tauri::async_runtime::spawn_blocking(move || list_servers_sync(app))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> {
+    let mut summaries = store::list_servers(&app)?;
+    let store_servers = store::servers(&app)?;
+    let counts = thread::scope(|scope| {
+        store_servers
+            .iter()
+            .map(|server| {
+                scope.spawn(|| {
+                    let client = api::http_client_with_timeout(
+                        server.use_system_proxy,
+                        Duration::from_secs(3),
+                    )
+                    .ok()?;
+                    let counts = api::item_counts(&client, server).ok()?;
+                    Some((server.id.as_str(), counts))
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|handle| handle.join().ok().flatten())
+            .collect::<Vec<_>>()
+    });
+    for summary in &mut summaries {
+        if let Some((_, counts)) = counts.iter().find(|(id, _)| *id == summary.id) {
+            summary.movie_count = counts.movie_count;
+            summary.series_count = counts.series_count;
+        }
+    }
+    Ok(summaries)
+}
+
+#[tauri::command]
+pub(crate) fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
+    store::settings(&app)
+}
+
+#[tauri::command]
+pub(crate) fn save_settings(
+    app: AppHandle,
+    input: SaveSettingsInput,
+) -> Result<AppSettings, String> {
+    store::save_settings(&app, normalize_settings(input))
+}
+
+#[tauri::command]
+pub(crate) async fn set_active_server(
+    app: AppHandle,
+    input: ServerIdInput,
+) -> Result<SavedServerSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || store::set_active_server(&app, input.server_id))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn delete_server(app: AppHandle, input: ServerIdInput) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || store::delete_server(&app, input.server_id))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn load_home(app: AppHandle) -> Result<HomePayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_home_sync(app))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let (libraries, latest, resume_items) = thread::scope(|scope| {
+        let libraries = scope.spawn(|| api::fetch_libraries(&client, &server));
+        let latest = scope.spawn(|| api::get_latest_items(&client, &server, None, "24"));
+        let resume_items = scope.spawn(|| api::get_resume_items(&client, &server));
+
+        let libraries = libraries
+            .join()
+            .map_err(|_| "Failed to load libraries.".to_string())??;
+        let latest = latest
+            .join()
+            .map_err(|_| "Failed to load latest items.".to_string())??;
+        let resume_items = resume_items
+            .join()
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or_default();
+        Ok::<_, String>((libraries, latest, resume_items))
+    })?;
+
+    Ok(HomePayload {
+        server: store::server_summary(&server),
+        libraries,
+        library_latest: Vec::new(),
+        latest,
+        recommended_movies: Vec::new(),
+        recommended_shows: Vec::new(),
+        resume_items,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn load_home_more(app: AppHandle) -> Result<HomeMorePayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_home_more_sync(app))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let libraries = api::fetch_libraries(&client, &server)?;
+    let (library_latest, recommended_movies, recommended_shows) = thread::scope(|scope| {
+        let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
+        let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
+        let recommended_shows =
+            scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
+
+        (
+            library_latest.join().unwrap_or_default(),
+            recommended_movies
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            recommended_shows
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+        )
+    });
+
+    Ok(HomeMorePayload {
+        server_id: server.id,
+        library_latest,
+        recommended_movies,
+        recommended_shows,
+    })
+}
+
+fn load_library_latest(
+    client: &reqwest::blocking::Client,
+    server: &SavedServer,
+    libraries: &[MediaLibrary],
+) -> Vec<LibraryLatestPayload> {
+    thread::scope(|scope| {
+        libraries
+            .iter()
+            .map(|library| {
+                scope.spawn(|| LibraryLatestPayload {
+                    library: library.clone(),
+                    items: api::get_latest_items(client, server, Some(&library.id), "18")
+                        .unwrap_or_default()
+                        .into_iter()
+                        .take(12)
+                        .collect(),
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|handle| handle.join().ok())
+            .filter(|row| !row.items.is_empty())
+            .collect()
+    })
+}
+
+fn load_recommended_movies(
+    client: &reqwest::blocking::Client,
+    server: &SavedServer,
+) -> Result<Vec<crate::models::MediaItem>, String> {
+    api::get_recommendations(
+        client,
+        server,
+        &[
+            ("UserId", server.user_id.clone()),
+            ("userId", server.user_id.clone()),
+            ("Limit", "12".to_string()),
+            ("limit", "12".to_string()),
+            ("CategoryLimit", "12".to_string()),
+            ("categoryLimit", "12".to_string()),
+            ("ItemLimit", "12".to_string()),
+            ("itemLimit", "12".to_string()),
+            ("Fields", api::item_fields()),
+            ("fields", api::item_fields()),
+            ("EnableImageTypes", api::image_types()),
+            ("enableImageTypes", api::image_types()),
+        ],
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn load_library(
+    app: AppHandle,
+    input: LibraryInput,
+) -> Result<LibraryPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_library_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPayload, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let start_index = input.start_index.unwrap_or(0);
+    let limit = input.limit.unwrap_or(60).clamp(1, 120);
+    let item_type = normalize_item_type(input.item_type.as_deref());
+    let (sort_by, sort_order) =
+        normalize_library_sort(input.sort_by.as_deref(), input.sort_order.as_deref());
+    let (library, (items, total_count)) = if start_index == 0 {
+        thread::scope(|scope| {
+            let libraries = scope.spawn(|| api::fetch_libraries(&client, &server));
+            let items = scope.spawn(|| {
+                api::get_library_items(
+                    &client,
+                    &server,
+                    &input.library_id,
+                    start_index,
+                    limit,
+                    item_type,
+                    sort_by,
+                    sort_order,
+                )
+            });
+            let library = libraries
+                .join()
+                .map_err(|_| "Failed to load libraries.".to_string())??
+                .into_iter()
+                .find(|library| library.id == input.library_id)
+                .ok_or_else(|| "Library not found.".to_string())?;
+            let items = items
+                .join()
+                .map_err(|_| "Failed to load library items.".to_string())??;
+            Ok::<_, String>((library, items))
+        })?
+    } else {
+        (
+            MediaLibrary {
+                id: input.library_id.clone(),
+                name: String::new(),
+                collection_type: None,
+                image_url: None,
+            },
+            api::get_library_items(
+                &client,
+                &server,
+                &input.library_id,
+                start_index,
+                limit,
+                item_type,
+                sort_by,
+                sort_order,
+            )?,
+        )
+    };
+    let has_more = start_index + items.len() < total_count;
+    Ok(LibraryPayload {
+        library,
+        items,
+        total_count,
+        start_index,
+        limit,
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn load_item(
+    app: AppHandle,
+    input: ItemInput,
+) -> Result<ItemDetailPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_item_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let raw = api::get_item_raw(&client, &server, &input.item_id)?;
+    let entry_item = api::map_item(&server, raw.clone());
+    let detail_raw = entry_item
+        .series_id
+        .as_deref()
+        .filter(|_| entry_item.item_type == "Episode")
+        .and_then(|series_id| api::get_item_raw(&client, &server, series_id).ok())
+        .unwrap_or_else(|| raw.clone());
+    let item = api::map_item(&server, detail_raw.clone());
+    let item_id = input.item_id.clone();
+    let series_id = if item.item_type == "Series" {
+        Some(item.id.as_str())
+    } else {
+        item.series_id.as_deref()
+    };
+    let (children, seasons, episodes) = thread::scope(|scope| {
+        let children = scope.spawn(|| api::get_item_children(&client, &server, &item.id));
+        let seasons = scope.spawn(|| {
+            series_id
+                .map(|id| api::get_show_seasons(&client, &server, id))
+                .unwrap_or_else(|| Ok(Vec::new()))
+        });
+        let episodes = scope.spawn(|| {
+            series_id
+                .map(|id| api::get_show_episodes(&client, &server, id, None))
+                .unwrap_or_else(|| Ok(Vec::new()))
+        });
+        Ok::<_, String>((
+            children
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            seasons.join().ok().and_then(Result::ok).unwrap_or_default(),
+            episodes
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+        ))
+    })?;
+    let selected_media_item_id = if raw.item_type.as_deref() == Some("Episode") {
+        item_id.as_str()
+    } else {
+        episodes
+            .first()
+            .map(|episode| episode.id.as_str())
+            .unwrap_or(&item_id)
+    };
+    let media_sources =
+        api::get_media_versions(&client, &server, selected_media_item_id).unwrap_or_default();
+
+    Ok(ItemDetailPayload {
+        item,
+        children,
+        seasons,
+        episodes,
+        media_sources,
+        people: Vec::new(),
+        art: Vec::new(),
+        similar: Vec::new(),
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn load_item_more(
+    app: AppHandle,
+    input: ItemInput,
+) -> Result<ItemMorePayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_item_more_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_item_more_sync(app: AppHandle, input: ItemInput) -> Result<ItemMorePayload, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let raw = api::get_item_raw(&client, &server, &input.item_id)?;
+    let item = api::map_item(&server, raw.clone());
+    let detail_raw = item
+        .series_id
+        .as_deref()
+        .filter(|_| item.item_type == "Episode")
+        .and_then(|series_id| api::get_item_raw(&client, &server, series_id).ok())
+        .unwrap_or_else(|| raw.clone());
+    let detail_item = api::map_item(&server, detail_raw.clone());
+    let similar = api::get_similar_items(&client, &server, &detail_item.id).unwrap_or_default();
+
+    Ok(ItemMorePayload {
+        item_id: input.item_id,
+        people: api::people(&server, &detail_raw),
+        art: api::art_urls(&server, &detail_raw),
+        similar,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn load_media_sources(
+    app: AppHandle,
+    input: ItemInput,
+) -> Result<Vec<crate::models::MediaVersion>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let server = store::active_server(&app)?;
+        let client = api::http_client(server.use_system_proxy)?;
+        api::get_media_versions(&client, &server, &input.item_id)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn search_items(
+    app: AppHandle,
+    input: SearchInput,
+) -> Result<SearchPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || search_items_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn search_items_sync(app: AppHandle, input: SearchInput) -> Result<SearchPayload, String> {
+    let query = input.query.trim();
+    if query.is_empty() {
+        return Ok(SearchPayload { items: Vec::new() });
+    }
+
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    Ok(SearchPayload {
+        items: api::search_items(&client, &server, query)?,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn play_item(app: AppHandle, input: ItemInput) -> Result<PlayResult, String> {
+    tauri::async_runtime::spawn_blocking(move || play_item_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    let item = api::resolve_playable_item(&client, &server, &input.item_id)?;
+    let start_position_ticks = item
+        .user_data
+        .as_ref()
+        .and_then(|data| data.playback_position_ticks)
+        .filter(|ticks| *ticks > 0);
+    let fallback_play_session_id = crate::playback_watch::play_session_id(&item.id);
+    let playback = api::playback_launch_info(
+        &client,
+        &server,
+        &item.id,
+        input.media_source_id.as_deref(),
+        input.audio_stream_index,
+        input.subtitle_stream_index,
+        &fallback_play_session_id,
+    )?;
+    let play_session_id = playback.play_session_id.clone();
+    let media_source_id = playback.media_source_id.clone();
+    if mpv::terminate_all() {
+        thread::sleep(Duration::from_millis(300));
+    }
+    let launch = mpv::launch(
+        &app,
+        &server,
+        &item.id,
+        media_source_id,
+        play_session_id.clone(),
+        &playback.stream_url,
+        start_position_ticks,
+    )?;
+    let result = launch.result;
+    let watched_item_id = result.item_id.clone();
+    let watched_media_source_id = result.media_source_id.clone();
+    let watched_audio_stream_index = input.audio_stream_index;
+    let watched_subtitle_stream_index = input.subtitle_stream_index;
+    mpv::remember_session(
+        play_session_id.clone(),
+        launch.control_path.clone(),
+        launch.progress_path.clone(),
+        launch.child.id(),
+    );
+    thread::spawn(move || {
+        crate::playback_watch::watch_mpv_playback(
+            app,
+            server,
+            launch.child,
+            launch.progress_path,
+            watched_item_id,
+            watched_media_source_id,
+            play_session_id,
+            watched_audio_stream_index,
+            watched_subtitle_stream_index,
+            start_position_ticks,
+        );
+    });
+    Ok(result)
+}
+
+#[tauri::command]
+pub(crate) async fn control_playback(input: PlaybackControlInput) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        mpv::control(&input.play_session_id, &input.command)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn playback_state(
+    input: PlaybackStateInput,
+) -> Result<PlaybackStateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || mpv::state(&input.play_session_id))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn mark_favorite(app: AppHandle, input: MarkInput) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || mark_item(app, input, api::set_favorite))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn mark_played(app: AppHandle, input: MarkInput) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || mark_item(app, input, api::set_played))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn mark_item(
+    app: AppHandle,
+    input: MarkInput,
+    mark: fn(&reqwest::blocking::Client, &SavedServer, &str, bool) -> Result<(), String>,
+) -> Result<(), String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    mark(&client, &server, &input.item_id, input.value)
+}
+
+#[tauri::command]
+pub(crate) async fn fetch_server_name(
+    input: FetchServerNameInput,
+) -> Result<FetchServerNameResult, String> {
+    tauri::async_runtime::spawn_blocking(move || fetch_server_name_sync(input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn fetch_server_name_sync(input: FetchServerNameInput) -> Result<FetchServerNameResult, String> {
+    let _server_type = input.server_type.as_str();
+    let url = api::normalize_server_url(&input.url)?;
+    let client = api::http_client(input.use_system_proxy)?;
+    let info = api::fetch_server_public_info(&client, &url).unwrap_or_default();
+    let name = info
+        .server_name
+        .or(info.product_name)
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| api::clean_name("", "", &url));
+    Ok(FetchServerNameResult { name })
+}
+
+#[tauri::command]
+pub(crate) async fn report_playback_start(
+    app: AppHandle,
+    input: ReportPlaybackStartInput,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || report_playback_start_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn report_playback_start_sync(
+    app: AppHandle,
+    input: ReportPlaybackStartInput,
+) -> Result<(), String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    api::report_playback_start(&client, &server, &input)
+}
+
+#[tauri::command]
+pub(crate) async fn report_playback_progress(
+    app: AppHandle,
+    input: ReportPlaybackProgressInput,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || report_playback_progress_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn report_playback_progress_sync(
+    app: AppHandle,
+    input: ReportPlaybackProgressInput,
+) -> Result<(), String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    api::report_playback_progress(&client, &server, &input)
+}
+
+#[tauri::command]
+pub(crate) async fn report_playback_stopped(
+    app: AppHandle,
+    input: ReportPlaybackStoppedInput,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || report_playback_stopped_sync(app, input))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn report_playback_stopped_sync(
+    app: AppHandle,
+    input: ReportPlaybackStoppedInput,
+) -> Result<(), String> {
+    let server = store::active_server(&app)?;
+    let client = api::http_client(server.use_system_proxy)?;
+    api::report_playback_stopped(&client, &server, &input)
+}
+
+fn normalize_item_type(value: Option<&str>) -> Option<&'static str> {
+    match value {
+        Some("Movie") => Some("Movie"),
+        Some("Series") => Some("Series"),
+        Some("Episode") => Some("Episode"),
+        Some("Video") => Some("Video"),
+        _ => None,
+    }
+}
+
+fn normalize_library_sort(
+    sort_by: Option<&str>,
+    sort_order: Option<&str>,
+) -> (&'static str, &'static str) {
+    let sort_by = match sort_by {
+        Some("SortName") => "SortName",
+        Some("PremiereDate") => "PremiereDate",
+        Some("CommunityRating") => "CommunityRating",
+        _ => "DateCreated",
+    };
+    let sort_order = match sort_order {
+        Some("Ascending") => "Ascending",
+        _ => "Descending",
+    };
+    (sort_by, sort_order)
+}

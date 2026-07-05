@@ -1,0 +1,26 @@
+import type { MediaItem } from "./types";
+
+export function itemMeta(item: MediaItem) {
+  const chunks = [];
+  if (item.year) {
+    chunks.push(String(item.year));
+  }
+  if (item.childCount) {
+    chunks.push(`${item.childCount} 集`);
+  }
+  if (item.itemType && !["folder", "movie", "series", "season"].includes(item.itemType.toLowerCase())) {
+    chunks.push(item.itemType);
+  }
+  return chunks.join(" / ");
+}
+
+export function episodeLabel(item: MediaItem) {
+  if (item.seasonNumber && item.episodeNumber) {
+    return `S${item.seasonNumber}E${item.episodeNumber}`;
+  }
+  return itemMeta(item);
+}
+
+export function bg(url?: string | null) {
+  return url ? { backgroundImage: `linear-gradient(90deg, rgba(24,74,180,.82), rgba(0,0,0,.12)), url("${url}")` } : undefined;
+}

@@ -1,0 +1,78 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="scene" x1="0" y1="0" x2="1440" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#15373F"/>
+      <stop offset="0.46" stop-color="#3D314A"/>
+      <stop offset="1" stop-color="#050607"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#000000" stop-opacity="0.22"/>
+      <stop offset="0.48" stop-color="#000000" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.78"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-40%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.36"/>
+    </filter>
+    <style>
+      .title { font: 800 18px Inter, "Segoe UI", Arial, sans-serif; fill: #fff; }
+      .meta { font: 700 12px Inter, "Segoe UI", Arial, sans-serif; fill: rgba(255,255,255,.56); }
+      .time { font: 900 12px Inter, "Segoe UI", Arial, sans-serif; fill: rgba(255,255,255,.78); }
+      .pill { font: 900 14px Inter, "Segoe UI", Arial, sans-serif; fill: #fff; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#050607"/>
+  <rect width="1440" height="900" fill="url(#scene)"/>
+  <circle cx="332" cy="248" r="220" fill="#6AA6A1" opacity=".22" filter="url(#blur)"/>
+  <circle cx="1048" cy="330" r="290" fill="#B45C7D" opacity=".17" filter="url(#blur)"/>
+  <path d="M0 570C170 474 325 480 454 552C594 631 745 648 902 562C1080 465 1252 493 1440 620V900H0V570Z" fill="#0B0F12" opacity=".62"/>
+  <rect width="1440" height="900" fill="url(#shade)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="42" y="34" width="820" height="68" rx="34" fill="#06080C" fill-opacity=".48" stroke="white" stroke-opacity=".16"/>
+    <circle cx="76" cy="68" r="24" fill="white" fill-opacity=".12"/>
+    <path d="M81 56L69 68L81 80" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="120" y="62" class="title">流浪地球 2</text>
+    <text x="120" y="82" class="meta">mpv / 4K HDR / HEVC</text>
+    <circle cx="704" cy="68" r="21" fill="white" fill-opacity=".12"/>
+    <path d="M695 68H713" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="754" cy="68" r="21" fill="white" fill-opacity=".12"/>
+    <rect x="746" y="60" width="16" height="16" rx="2" stroke="white" stroke-width="2"/>
+    <circle cx="804" cy="68" r="21" fill="#FF5F57" fill-opacity=".85"/>
+    <path d="M797 61L811 75M811 61L797 75" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(340 720)" filter="url(#shadow)">
+    <rect width="760" height="118" rx="59" fill="#06080C" fill-opacity=".56" stroke="white" stroke-opacity=".16"/>
+    <text x="32" y="36" class="time">00:42:18</text>
+    <rect x="96" y="27" width="568" height="4" rx="2" fill="white" fill-opacity=".26"/>
+    <rect x="96" y="27" width="294" height="4" rx="2" fill="white" fill-opacity=".94"/>
+    <circle cx="390" cy="29" r="7" fill="white"/>
+    <text x="674" y="36" class="time">02:13:44</text>
+
+    <circle cx="92" cy="76" r="24" fill="white" fill-opacity=".12"/>
+    <path d="M101 64L89 76L101 88" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="158" cy="76" r="24" fill="white" fill-opacity=".18"/>
+    <rect x="150" y="64" width="5" height="24" rx="2.5" fill="white"/>
+    <rect x="162" y="64" width="5" height="24" rx="2.5" fill="white"/>
+    <circle cx="224" cy="76" r="24" fill="white" fill-opacity=".12"/>
+    <path d="M215 64L227 76L215 88" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="284" y="52" width="82" height="48" rx="24" fill="white" fill-opacity=".12"/>
+    <text x="306" y="81" class="pill">音量</text>
+    <rect x="378" y="52" width="96" height="48" rx="24" fill="white" fill-opacity=".12"/>
+    <text x="402" y="81" class="pill">静音</text>
+    <rect x="486" y="52" width="82" height="48" rx="24" fill="white" fill-opacity=".12"/>
+    <text x="508" y="81" class="pill">音轨</text>
+    <rect x="580" y="52" width="96" height="48" rx="24" fill="white" fill-opacity=".12"/>
+    <text x="604" y="81" class="pill">字幕</text>
+  </g>
+
+  <g transform="translate(64 178)">
+    <text x="0" y="0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="52" font-weight="1000" fill="white">Zplayer</text>
+    <text x="0" y="42" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="800" fill="white" fill-opacity=".72">沉浸式本地/媒体库播放界面</text>
+  </g>
+</svg>

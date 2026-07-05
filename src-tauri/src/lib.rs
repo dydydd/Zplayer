@@ -1,0 +1,52 @@
+mod api;
+mod commands;
+mod models;
+mod mpv;
+mod playback_watch;
+mod store;
+
+use tauri::Manager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                mpv::terminate_all();
+            }
+            tauri::WindowEvent::Resized(_)
+            | tauri::WindowEvent::ScaleFactorChanged { .. }
+            | tauri::WindowEvent::Focused(true) => {
+                mpv::restack_all(&window.app_handle());
+            }
+            _ => {}
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::test_server_login,
+            commands::save_server,
+            commands::list_servers,
+            commands::load_settings,
+            commands::save_settings,
+            commands::set_active_server,
+            commands::delete_server,
+            commands::load_home,
+            commands::load_home_more,
+            commands::load_library,
+            commands::load_item,
+            commands::load_item_more,
+            commands::load_media_sources,
+            commands::search_items,
+            commands::play_item,
+            commands::control_playback,
+            commands::playback_state,
+            commands::mark_favorite,
+            commands::mark_played,
+            commands::fetch_server_name,
+            commands::report_playback_start,
+            commands::report_playback_progress,
+            commands::report_playback_stopped
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

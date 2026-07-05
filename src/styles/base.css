@@ -1,0 +1,312 @@
+﻿:root {
+  --page-pad: clamp(18px, 3.2vw, 48px);
+  --chrome-control: clamp(42px, 4.4vw, 52px);
+  --chrome-top: clamp(18px, 5vh, 54px);
+  --glass-bg: rgba(14, 16, 22, 0.34);
+  --glass-bg-hover: rgba(255, 255, 255, 0.17);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 26px rgba(0, 0, 0, 0.24);
+  --logo-height: clamp(64px, 14vh, 150px);
+  --tv-ease: ease-out;
+  --tv-spring: ease-out;
+  font-family:
+    Inter, "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+  color: #f4f4f4;
+  background: #050505;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  background: #050505;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html.playing-embedded,
+html.playing-embedded body,
+html.playing-embedded #root,
+html.playing-embedded .app,
+html.playing-embedded .workspace,
+html.playing-embedded .page {
+  background: transparent !important;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 4px;
+}
+
+.app {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  border-radius: 0;
+  background: #050505;
+}
+
+.app.theme-midnight {
+  --glass-bg: rgba(10, 19, 34, 0.42);
+  --glass-bg-hover: rgba(92, 159, 255, 0.2);
+  --glass-border: rgba(145, 190, 255, 0.16);
+  background: #06111f;
+}
+
+.app.theme-midnight .workspace,
+.app.theme-midnight .home-shelves,
+.app.theme-midnight .library-page,
+.app.theme-midnight .search-page,
+.app.theme-midnight .server-page,
+.app.theme-midnight .settings-page {
+  background:
+    radial-gradient(circle at 78% 8%, rgba(71, 133, 216, 0.18), transparent 34%),
+    #06111f;
+}
+
+.app::before {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  content: "";
+  pointer-events: none;
+}
+
+html.playing-embedded .app::before {
+  display: none;
+}
+
+.topbar button,
+.section-title button,
+.filters button,
+.filters select,
+.back,
+.hero-actions button,
+.modal-actions button,
+.password-row button {
+  display: grid;
+  min-width: 50px;
+  height: 50px;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: #f8f8f8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+  transition:
+    background 0.16s var(--tv-ease),
+    transform 0.16s var(--tv-ease);
+}
+
+.topbar button:hover,
+.topbar button:focus-visible,
+.section-title button:hover,
+.section-title button:focus-visible,
+.filters button:hover,
+.filters button:focus-visible,
+.filters select:hover,
+.filters select:focus-visible,
+.back:hover,
+.back:focus-visible,
+.hero-actions button:hover,
+.hero-actions button:focus-visible,
+.modal-actions button:hover {
+  background: var(--glass-bg-hover);
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-radius: 0;
+  background: #050505;
+  scrollbar-width: none;
+}
+
+.workspace::-webkit-scrollbar {
+  display: none;
+}
+
+.topbar {
+  position: fixed;
+  top: var(--chrome-top);
+  right: var(--page-pad);
+  z-index: 30;
+  display: flex;
+  max-width: calc(100vw - var(--page-pad) * 2);
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.topbar.search-open {
+  gap: 10px;
+}
+
+.chrome-float {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.28s var(--tv-ease),
+    transform 0.34s var(--tv-ease);
+}
+
+.chrome-float.hidden {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-14px);
+}
+
+.drag-strip {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 25;
+  height: 120px;
+}
+
+html.playing-embedded .drag-strip {
+  display: none;
+}
+
+.search {
+  display: block;
+  width: min(330px, calc(100vw - var(--page-pad) * 2));
+  height: var(--chrome-control);
+  padding: 0 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 12, 16, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+  animation: search-pop 0.28s var(--tv-spring);
+}
+
+.search input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 19px;
+}
+
+.search input::placeholder {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+@keyframes search-pop {
+  from {
+    width: var(--chrome-control);
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    width: min(330px, calc(100vw - var(--page-pad) * 2));
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.topbar .icon-btn {
+  display: grid;
+  width: var(--chrome-control);
+  min-width: var(--chrome-control);
+  height: var(--chrome-control);
+  min-height: var(--chrome-control);
+  flex: 0 0 var(--chrome-control);
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 17, 20, 0.34);
+  color: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+
+.topbar .icon-btn:hover,
+.topbar .icon-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.status,
+.error {
+  position: fixed;
+  right: 34px;
+  bottom: 28px;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 520px;
+  max-height: 50vh;
+  overflow: auto;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: #2d2d2f;
+  color: #fff;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  white-space: pre-wrap;
+}
+
+.error {
+  background: #652020;
+}
+
+html.playing-embedded .status,
+html.playing-embedded .error {
+  top: 112px;
+  right: 42px;
+  bottom: auto;
+}
+
+.page {
+  min-height: 100vh;
+  padding: clamp(72px, 12vh, 98px) var(--page-pad) clamp(54px, 8vh, 86px);
+}
+
+.page.narrow {
+  max-width: 1050px;
+}
+
