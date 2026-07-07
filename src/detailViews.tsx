@@ -417,6 +417,7 @@ export function PlayerView({
   seekForwardSeconds,
   sources,
   currentSourceId,
+  initialSubtitleIndex,
   onSwitchSource,
 }: {
   title: string;
@@ -432,6 +433,7 @@ export function PlayerView({
   seekForwardSeconds: number;
   sources: MediaVersion[];
   currentSourceId: string | null;
+  initialSubtitleIndex?: number;
   onSwitchSource: (sourceId?: string) => Promise<void>;
 }) {
   const time = state?.timePos ?? 0;
@@ -442,7 +444,7 @@ export function PlayerView({
   const [visible, setVisible] = useState(true);
   const [menu, setMenu] = useState<"source" | "audio" | "subtitle" | null>(null);
   const [audioIndex, setAudioIndex] = useState<number>();
-  const [subtitleIndex, setSubtitleIndex] = useState<number>();
+  const [subtitleIndex, setSubtitleIndex] = useState<number | undefined>(initialSubtitleIndex);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastControlsShownAt = useRef(0);
   const onCommandRef = useRef(onCommand);
@@ -454,6 +456,10 @@ export function PlayerView({
     onCommandRef.current = onCommand;
     onExitRef.current = onExit;
   });
+
+  useEffect(() => {
+    setSubtitleIndex(initialSubtitleIndex);
+  }, [currentSourceId, initialSubtitleIndex]);
 
   function showControls() {
     if (menu) return;
@@ -602,7 +608,7 @@ export function PlayerView({
                     const nextIndex = stream.index ?? index + 1;
                     setSubtitleIndex(nextIndex);
                     setMenu(null);
-                    void onCommand(`subtitle_set:${nextIndex}`);
+                    void onCommand(`subtitle_set:${index + 1}`);
                   }}>
                     <strong>{streamLabel(stream) ?? `字幕 ${index + 1}`}</strong>
                     <span>{streamFacts(stream).join(" / ") || "默认字幕"}</span>

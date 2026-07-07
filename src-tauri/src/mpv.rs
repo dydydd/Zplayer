@@ -51,6 +51,8 @@ pub(crate) fn launch(
     media_source_id: Option<String>,
     play_session_id: String,
     stream_url: &str,
+    subtitle_track_position: Option<i32>,
+    subtitle_url: Option<&str>,
     start_position_ticks: Option<i64>,
 ) -> Result<Launch, String> {
     let redacted_url = redact_secret(stream_url, &server.access_token);
@@ -88,6 +90,9 @@ pub(crate) fn launch(
         command.arg(arg);
     }
     for arg in mpv_settings_args(&settings) {
+        command.arg(arg);
+    }
+    for arg in mpv_subtitle_args(&settings, subtitle_track_position, subtitle_url) {
         command.arg(arg);
     }
     if let Some(arg) = mpv_start_arg(start_position_ticks) {
@@ -376,12 +381,28 @@ fn mpv_start_arg(position_ticks: Option<i64>) -> Option<String> {
 }
 
 fn mpv_settings_args(settings: &AppSettings) -> Vec<String> {
-    let mut args = vec![format!(
+    vec![format!(
         "--volume={}",
         settings.default_volume.clamp(0, 100)
-    )];
-    if settings.subtitle_mode == "off" {
-        args.push("--sid=no".to_string());
+    )]
+}
+
+fn mpv_subtitle_args(
+    settings: &AppSettings,
+    subtitle_track_position: Option<i32>,
+    subtitle_url: Option<&str>,
+) -> Vec<String> {
+    let mut args = Vec::new();
+    match subtitle_track_position {
+        Some(position) if position < 0 => args.push("--sid=no".to_string()),
+        Some(position) if position > 0 && subtitle_url.is_none() => {
+            args.push(format!("--sid={position}"));
+        }
+        None if settings.subtitle_mode == "off" => args.push("--sid=no".to_string()),
+        _ => {}
+    }
+    if let Some(url) = subtitle_url {
+        args.push(format!("--sub-file={url}"));
     }
     args
 }
@@ -800,7 +821,32 @@ mod tests {
         let args = mpv_settings_args(&settings);
 
         assert!(args.contains(&"--volume=65".to_string()));
-        assert!(args.contains(&"--sid=no".to_string()));
+        assert!(!args.contains(&"--sid=no".to_string()));
+        assert_eq!(
+            mpv_subtitle_args(&settings, None, None),
+            vec!["--sid=no".to_string()]
+        );
+    }
+
+    #[test]
+    fn converts_explicit_subtitle_selection_to_mpv_args() {
+        let settings = AppSettings {
+            subtitle_mode: "off".to_string(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            mpv_subtitle_args(&settings, Some(2), None),
+            vec!["--sid=2".to_string()]
+        );
+        assert_eq!(
+            mpv_subtitle_args(&settings, Some(-1), None),
+            vec!["--sid=no".to_string()]
+        );
+        assert_eq!(
+            mpv_subtitle_args(&settings, Some(1), Some("http://example.test/sub.srt")),
+            vec!["--sub-file=http://example.test/sub.srt".to_string()]
+        );
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub(crate) struct ItemInput {
     pub(crate) media_source_id: Option<String>,
     pub(crate) audio_stream_index: Option<i32>,
     pub(crate) subtitle_stream_index: Option<i32>,
+    pub(crate) subtitle_stream_position: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]

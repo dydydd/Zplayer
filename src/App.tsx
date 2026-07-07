@@ -23,6 +23,11 @@ type PlaybackStoppedEvent = {
   failed: boolean;
 };
 
+type SubtitleSelection = {
+  subtitleStreamIndex?: number;
+  subtitleStreamPosition?: number;
+};
+
 function samePlaybackState(left: PlaybackState | null, right: PlaybackState | null) {
   return left?.timePos === right?.timePos
     && left?.duration === right?.duration
@@ -52,6 +57,49 @@ function optimisticPlaybackState(current: PlaybackState | null, command: Playbac
     return Number.isFinite(volume) ? { ...current, muted: volume === 0, volume: Math.min(Math.max(volume, 0), 100) } : current;
   }
   return current;
+}
+
+function mediaSourceForPlayback(sources: MediaVersion[] | undefined, mediaSourceId?: string) {
+  if (!sources?.length) return undefined;
+  return sources.find((source) => source.id === mediaSourceId) ?? sources[0];
+}
+
+function defaultSubtitleSelection(source?: MediaVersion): SubtitleSelection {
+  if (!source?.subtitleStreams.length) return {};
+  const streamIndex = source.subtitleStreams.findIndex((stream) => stream.isDefault);
+  const position = streamIndex >= 0 ? streamIndex : 0;
+  const stream = source.subtitleStreams[position];
+  return {
+    subtitleStreamIndex: stream.index ?? position + 1,
+    subtitleStreamPosition: position + 1,
+  };
+}
+
+function subtitleStreamPosition(source: MediaVersion | undefined, subtitleStreamIndex: number | undefined) {
+  if (subtitleStreamIndex === undefined) return undefined;
+  if (subtitleStreamIndex < 0) return -1;
+  const streamIndex = source?.subtitleStreams.findIndex((stream) => stream.index === subtitleStreamIndex) ?? -1;
+  if (streamIndex >= 0) return streamIndex + 1;
+  if (source && subtitleStreamIndex >= 1 && subtitleStreamIndex <= source.subtitleStreams.length) {
+    return subtitleStreamIndex;
+  }
+  return undefined;
+}
+
+function resolveSubtitleSelection(source: MediaVersion | undefined, subtitleStreamIndex: number | undefined, subtitleMode: ResolvedAppSettings["subtitleMode"]): SubtitleSelection {
+  if (subtitleStreamIndex !== undefined) {
+    return {
+      subtitleStreamIndex,
+      subtitleStreamPosition: subtitleStreamPosition(source, subtitleStreamIndex),
+    };
+  }
+  if (subtitleMode === "off") {
+    return {
+      subtitleStreamIndex: -1,
+      subtitleStreamPosition: -1,
+    };
+  }
+  return defaultSubtitleSelection(source);
 }
 
 function App() {
@@ -654,6 +702,8 @@ function App() {
     const title = detail?.item.id === itemId
       ? detail.item.name
       : findKnownItem(itemId, home, library, detail)?.name ?? "正在播放";
+    const source = mediaSourceForPlayback(sources, mediaSourceId);
+    const subtitleSelection = resolveSubtitleSelection(source, subtitleStreamIndex, resolvedSettings.subtitleMode);
     setPlaybackState(null);
     if (sources?.length) {
       setPlayerSources(sources);
@@ -670,12 +720,20 @@ function App() {
         itemId,
         mediaSourceId,
         audioStreamIndex,
-        subtitleStreamIndex ?? (resolvedSettings.subtitleMode === "off" ? -1 : undefined),
+        subtitleSelection.subtitleStreamIndex,
+        subtitleSelection.subtitleStreamPosition,
       ),
     );
     if (result) {
       if (resolvedSettings.diagnosticsEnabled) setLastPlayResult(result);
-      openView({ name: "player", itemId: result.itemId, title, playSessionId: result.playSessionId, mediaSourceId: result.mediaSourceId ?? mediaSourceId ?? null });
+      openView({
+        name: "player",
+        itemId: result.itemId,
+        title,
+        playSessionId: result.playSessionId,
+        mediaSourceId: result.mediaSourceId ?? mediaSourceId ?? null,
+        subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
+      });
     }
   }
 
@@ -699,11 +757,13 @@ function App() {
     setPlaybackState(null);
     setPlayerTransparent(false);
     void ipc.controlPlayback(view.playSessionId, "stop").catch(() => {});
+    const subtitleSelection = resolveSubtitleSelection(nextSource, undefined, resolvedSettings.subtitleMode);
     const result = await run("切换版本", () => ipc.playItem(
       view.itemId,
       nextSource.id,
       undefined,
-      resolvedSettings.subtitleMode === "off" ? -1 : undefined,
+      subtitleSelection.subtitleStreamIndex,
+      subtitleSelection.subtitleStreamPosition,
     ));
     if (result) {
       if (resolvedSettings.diagnosticsEnabled) setLastPlayResult(result);
@@ -713,6 +773,7 @@ function App() {
         title: view.title,
         playSessionId: result.playSessionId,
         mediaSourceId: result.mediaSourceId ?? nextSource.id,
+        subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
       });
     }
   }
@@ -911,6 +972,7 @@ function App() {
             seekForwardSeconds={resolvedSettings.seekForwardSeconds}
             sources={playerSources}
             currentSourceId={view.mediaSourceId ?? null}
+            initialSubtitleIndex={view.subtitleStreamIndex ?? undefined}
             onSwitchSource={switchPlayerSource}
           />
         )}

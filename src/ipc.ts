@@ -41,8 +41,8 @@ export const ipc = {
   saveServer: (input: LoginResult) => invoke<SavedServer>("save_server", { input }),
   setActiveServer: (serverId: string) => invoke<SavedServer>("set_active_server", { input: { serverId } }),
   deleteServer: (serverId: string) => invoke<void>("delete_server", { input: { serverId } }),
-  playItem: (itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number) =>
-    invoke<PlayResult>("play_item", { input: { itemId, mediaSourceId, audioStreamIndex, subtitleStreamIndex } }),
+  playItem: (itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, subtitleStreamPosition?: number) =>
+    invoke<PlayResult>("play_item", { input: { itemId, mediaSourceId, audioStreamIndex, subtitleStreamIndex, subtitleStreamPosition } }),
   controlPlayback: (playSessionId: string, command: PlaybackCommand) =>
     invoke("control_playback", { input: { playSessionId, command } }),
   markFavorite: (itemId: string, value: boolean) => invoke<void>("mark_favorite", { input: { itemId, value } }),

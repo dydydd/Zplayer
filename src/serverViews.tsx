@@ -131,42 +131,37 @@ export function SettingsView({
       <h1>设置</h1>
       <section className="settings-grid">
         <SettingsPanel title="播放体验" note="这些选项会直接写入 mpv 启动参数和播放器控制。">
-          <label>
-            默认音量
-            <input type="number" min="0" max="100" value={draft.defaultVolume} onChange={(event) => update("defaultVolume", Number(event.target.value))} />
-          </label>
-          <label>
-            快退秒数
-            <input type="number" min="5" max="60" value={draft.seekBackSeconds} onChange={(event) => update("seekBackSeconds", Number(event.target.value))} />
-          </label>
-          <label>
-            快进秒数
-            <input type="number" min="5" max="180" value={draft.seekForwardSeconds} onChange={(event) => update("seekForwardSeconds", Number(event.target.value))} />
-          </label>
-          <label>
+          <Stepper label="默认音量" value={draft.defaultVolume} min={0} max={100} step={5} unit="%" onChange={(value) => update("defaultVolume", value)} />
+          <Stepper label="快退秒数" value={draft.seekBackSeconds} min={5} max={60} step={5} unit="秒" onChange={(value) => update("seekBackSeconds", value)} />
+          <Stepper label="快进秒数" value={draft.seekForwardSeconds} min={5} max={180} step={5} unit="秒" onChange={(value) => update("seekForwardSeconds", value)} />
+          <label className="settings-field">
             mpv 路径
-            <input value={draft.mpvPath} onChange={(event) => update("mpvPath", event.target.value)} placeholder="默认：mpv/mpv.exe" />
+            <input className="settings-path-input" value={draft.mpvPath} onChange={(event) => update("mpvPath", event.target.value)} placeholder="默认：mpv/mpv.exe" />
           </label>
         </SettingsPanel>
 
         <SettingsPanel title="字幕偏好" note="播放时会把默认字幕策略传给服务端和 mpv。">
-          <label>
-            默认字幕
-            <select value={draft.subtitleMode} onChange={(event) => update("subtitleMode", event.target.value as typeof draft.subtitleMode)}>
-              <option value="auto">自动选择</option>
-              <option value="off">默认关闭</option>
-            </select>
-          </label>
+          <SegmentedControl
+            label="默认字幕"
+            value={draft.subtitleMode}
+            options={[
+              { value: "auto", label: "自动选择" },
+              { value: "off", label: "默认关闭" },
+            ]}
+            onChange={(value) => update("subtitleMode", value)}
+          />
         </SettingsPanel>
 
         <SettingsPanel title="媒体库显示" note="影响媒体库和搜索页的海报网格密度。">
-          <label>
-            海报密度
-            <select value={draft.posterDensity} onChange={(event) => update("posterDensity", event.target.value as typeof draft.posterDensity)}>
-              <option value="comfortable">舒适</option>
-              <option value="compact">紧凑</option>
-            </select>
-          </label>
+          <SegmentedControl
+            label="海报密度"
+            value={draft.posterDensity}
+            options={[
+              { value: "comfortable", label: "舒适" },
+              { value: "compact", label: "紧凑" },
+            ]}
+            onChange={(value) => update("posterDensity", value)}
+          />
         </SettingsPanel>
 
         <SettingsPanel title="网络 / 缓存" note="关闭后首页、详情、媒体库每次都会重新请求服务端。">
@@ -174,13 +169,15 @@ export function SettingsView({
         </SettingsPanel>
 
         <SettingsPanel title="外观主题" note="立即切换应用外观。">
-          <label>
-            主题
-            <select value={draft.theme} onChange={(event) => update("theme", event.target.value as typeof draft.theme)}>
-              <option value="dark">深色影院</option>
-              <option value="midnight">午夜蓝</option>
-            </select>
-          </label>
+          <SegmentedControl
+            label="主题"
+            value={draft.theme}
+            options={[
+              { value: "dark", label: "深色影院" },
+              { value: "midnight", label: "午夜蓝" },
+            ]}
+            onChange={(value) => update("theme", value)}
+          />
         </SettingsPanel>
 
         <SettingsPanel title="日志 / 诊断" note="开启后保留最近一次播放的 mpv 日志摘要，方便排查播放失败。">
@@ -214,12 +211,88 @@ function SettingsPanel({ title, note, children }: { title: string; note: string;
   );
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function Stepper({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (value: number) => void;
+}) {
+  const decrease = () => onChange(clamp(value - step, min, max));
+  const increase = () => onChange(clamp(value + step, min, max));
+
+  return (
+    <div className="setting-control">
+      <span>{label}</span>
+      <div className="settings-stepper" role="group" aria-label={label}>
+        <button type="button" onClick={decrease} disabled={value <= min} aria-label={`${label}减少`}>
+          -
+        </button>
+        <strong>
+          {value}
+          <small>{unit}</small>
+        </strong>
+        <button type="button" onClick={increase} disabled={value >= max} aria-label={`${label}增加`}>
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SegmentedControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="setting-control">
+      <span>{label}</span>
+      <div className="settings-segmented" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={option.value === value ? "active" : ""}
+            onClick={() => onChange(option.value)}
+            aria-pressed={option.value === value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="settings-toggle">
-      {label}
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span>{checked ? "开启" : "关闭"}</span>
-    </label>
+    <div className="settings-toggle-row">
+      <span>{label}</span>
+      <button type="button" className={`settings-switch ${checked ? "on" : ""}`} onClick={() => onChange(!checked)} aria-pressed={checked}>
+        <span className="settings-switch-text">{checked ? "开启" : "关闭"}</span>
+        <span className="settings-switch-knob" />
+      </button>
+    </div>
   );
 }

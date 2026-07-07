@@ -178,6 +178,8 @@ pub(crate) struct MediaStream {
     pub(crate) sample_rate: Option<i64>,
     pub(crate) is_external: Option<bool>,
     pub(crate) is_default: Option<bool>,
+    pub(crate) delivery_method: Option<String>,
+    pub(crate) delivery_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]

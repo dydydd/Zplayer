@@ -536,6 +536,8 @@ fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String
         media_source_id,
         play_session_id.clone(),
         &playback.stream_url,
+        input.subtitle_stream_position,
+        playback.subtitle_url.as_deref(),
         start_position_ticks,
     )?;
     let result = launch.result;

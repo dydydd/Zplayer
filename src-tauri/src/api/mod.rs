@@ -14,8 +14,8 @@ use self::mapping::{first_playable_child, is_playable_item_type, map_search_hint
 pub(crate) use self::mapping::{map_item, people};
 use crate::models::{
     ApiItem, AuthResponse, ItemCounts, ItemsResponse, MediaArt, MediaItem, MediaLibrary,
-    MediaSource, MediaVersion, PlaybackInfo, PublicSystemInfo, RecommendationsResponse,
-    SavedServer, SearchHintResult,
+    MediaSource, MediaStream, MediaVersion, PlaybackInfo, PublicSystemInfo,
+    RecommendationsResponse, SavedServer, SearchHintResult,
 };
 use reqwest::blocking::Client;
 use reqwest::Url;
@@ -491,6 +491,7 @@ pub(crate) fn search_items(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlaybackLaunchInfo {
     pub(crate) stream_url: String,
+    pub(crate) subtitle_url: Option<String>,
     pub(crate) media_source_id: Option<String>,
     pub(crate) play_session_id: String,
 }
@@ -533,6 +534,12 @@ pub(crate) fn playback_launch_info(
     )?;
     Ok(PlaybackLaunchInfo {
         stream_url,
+        subtitle_url: fallback_subtitle_url(
+            server,
+            item_id,
+            media_source_id,
+            subtitle_stream_index,
+        )?,
         media_source_id: media_source_id.map(str::to_string),
         play_session_id: fallback_play_session_id.to_string(),
     })
@@ -554,6 +561,7 @@ fn playback_launch_info_from_response(
     let sources = ordered_media_sources(&info.media_sources, requested_media_source_id);
 
     for source in &sources {
+        let subtitle_url = selected_subtitle_url(server, item_id, source, subtitle_stream_index)?;
         if let Some(raw_url) = source
             .direct_stream_url
             .as_deref()
@@ -565,6 +573,7 @@ fn playback_launch_info_from_response(
             )?;
             return Ok(PlaybackLaunchInfo {
                 stream_url,
+                subtitle_url,
                 media_source_id: source
                     .id
                     .clone()
@@ -584,6 +593,7 @@ fn playback_launch_info_from_response(
             )?;
             return Ok(PlaybackLaunchInfo {
                 stream_url,
+                subtitle_url,
                 media_source_id: Some(source_id.to_string()),
                 play_session_id,
             });
@@ -600,6 +610,12 @@ fn playback_launch_info_from_response(
     )?;
     Ok(PlaybackLaunchInfo {
         stream_url,
+        subtitle_url: fallback_subtitle_url(
+            server,
+            item_id,
+            requested_media_source_id,
+            subtitle_stream_index,
+        )?,
         media_source_id: requested_media_source_id.map(str::to_string),
         play_session_id,
     })
@@ -661,6 +677,103 @@ fn fallback_stream_url(
         }
     }
     Ok(build_url(&server.url, &format!("Videos/{item_id}/stream"), &params)?.to_string())
+}
+
+fn selected_subtitle_url(
+    server: &SavedServer,
+    item_id: &str,
+    source: &MediaSource,
+    subtitle_stream_index: Option<i32>,
+) -> Result<Option<String>, String> {
+    if subtitle_stream_index.is_some_and(|index| index < 0) {
+        return Ok(None);
+    }
+    let Some(stream) = selected_external_subtitle(source, subtitle_stream_index) else {
+        return Ok(None);
+    };
+    if let Some(url) = stream
+        .delivery_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+    {
+        return media_playback_url(server, url).map(Some);
+    }
+    let (Some(source_id), Some(index)) = (source.id.as_deref(), stream.index) else {
+        return Ok(None);
+    };
+    subtitle_stream_url(
+        server,
+        item_id,
+        source_id,
+        index,
+        subtitle_stream_format(stream),
+    )
+    .map(Some)
+}
+
+fn selected_external_subtitle(
+    source: &MediaSource,
+    subtitle_stream_index: Option<i32>,
+) -> Option<&MediaStream> {
+    let mut streams = source.media_streams.iter().filter(|stream| {
+        stream.stream_type.as_deref() == Some("Subtitle")
+            && (stream.is_external == Some(true)
+                || stream.delivery_url.is_some()
+                || stream.delivery_method.as_deref() == Some("External"))
+    });
+    if let Some(index) = subtitle_stream_index {
+        return streams.find(|stream| stream.index == Some(index));
+    }
+    streams
+        .clone()
+        .find(|stream| stream.is_default == Some(true))
+        .or_else(|| streams.next())
+}
+
+fn fallback_subtitle_url(
+    server: &SavedServer,
+    item_id: &str,
+    media_source_id: Option<&str>,
+    subtitle_stream_index: Option<i32>,
+) -> Result<Option<String>, String> {
+    let (Some(source_id), Some(index)) = (media_source_id, subtitle_stream_index) else {
+        return Ok(None);
+    };
+    if index < 0 {
+        return Ok(None);
+    }
+    subtitle_stream_url(server, item_id, source_id, index, "srt").map(Some)
+}
+
+fn subtitle_stream_url(
+    server: &SavedServer,
+    item_id: &str,
+    media_source_id: &str,
+    subtitle_stream_index: i32,
+    format: &str,
+) -> Result<String, String> {
+    Ok(build_url(
+        &server.url,
+        &format!(
+            "Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_stream_index}/Stream.{format}"
+        ),
+        &[("api_key", server.access_token.clone())],
+    )?
+    .to_string())
+}
+
+fn subtitle_stream_format(stream: &MediaStream) -> &str {
+    match stream
+        .codec
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("ass") | Some("ssa") => "ass",
+        Some("vtt") | Some("webvtt") => "vtt",
+        _ => "srt",
+    }
 }
 
 fn append_play_session_id(raw_url: &str, play_session_id: Option<&str>) -> Result<String, String> {
@@ -958,6 +1071,7 @@ pub(crate) fn fetch_server_public_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::MediaStream;
 
     #[test]
     fn normalizes_http_server_url() {
@@ -1058,6 +1172,98 @@ mod tests {
         assert!(launch.stream_url.contains("MediaSourceId=source-b"));
         assert!(launch.stream_url.contains("PlaySessionId=server-session"));
         assert!(launch.stream_url.contains("api_key=token"));
+    }
+
+    #[test]
+    fn launch_info_loads_selected_external_subtitle() {
+        let server = SavedServer {
+            id: "id".to_string(),
+            name: "name".to_string(),
+            url: "http://127.0.0.1:8096".to_string(),
+            username: "user".to_string(),
+            user_id: "user-id".to_string(),
+            access_token: "token".to_string(),
+            active: true,
+            saved_at: 0,
+            use_system_proxy: true,
+        };
+        let info = PlaybackInfo {
+            play_session_id: Some("server-session".to_string()),
+            media_sources: vec![MediaSource {
+                id: Some("source-a".to_string()),
+                direct_stream_url: Some("/Videos/item/stream".to_string()),
+                media_streams: vec![MediaStream {
+                    index: Some(2),
+                    stream_type: Some("Subtitle".to_string()),
+                    is_external: Some(true),
+                    delivery_url: Some("/Videos/item/source-a/Subtitles/2/Stream.srt".to_string()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
+
+        let launch = playback_launch_info_from_response(
+            &server,
+            "item",
+            info,
+            Some("source-a"),
+            None,
+            Some(2),
+            "fallback-session",
+        )
+        .unwrap();
+
+        assert_eq!(
+            launch.subtitle_url.as_deref(),
+            Some("http://127.0.0.1:8096/Videos/item/source-a/Subtitles/2/Stream.srt?api_key=token")
+        );
+    }
+
+    #[test]
+    fn launch_info_builds_external_subtitle_url_without_delivery_url() {
+        let server = SavedServer {
+            id: "id".to_string(),
+            name: "name".to_string(),
+            url: "http://127.0.0.1:8096".to_string(),
+            username: "user".to_string(),
+            user_id: "user-id".to_string(),
+            access_token: "token".to_string(),
+            active: true,
+            saved_at: 0,
+            use_system_proxy: true,
+        };
+        let info = PlaybackInfo {
+            play_session_id: Some("server-session".to_string()),
+            media_sources: vec![MediaSource {
+                id: Some("source-a".to_string()),
+                direct_stream_url: Some("/Videos/item/stream".to_string()),
+                media_streams: vec![MediaStream {
+                    index: Some(3),
+                    stream_type: Some("Subtitle".to_string()),
+                    codec: Some("ass".to_string()),
+                    is_external: Some(true),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
+
+        let launch = playback_launch_info_from_response(
+            &server,
+            "item",
+            info,
+            Some("source-a"),
+            None,
+            Some(3),
+            "fallback-session",
+        )
+        .unwrap();
+
+        assert_eq!(
+            launch.subtitle_url.as_deref(),
+            Some("http://127.0.0.1:8096/Videos/item/source-a/Subtitles/3/Stream.ass?api_key=token")
+        );
     }
 
     #[test]
