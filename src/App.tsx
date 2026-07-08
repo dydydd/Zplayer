@@ -9,7 +9,7 @@ import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
 import type { AppSettings, HomePayload, ItemDetailPayload, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
-import { findKnownItem, libraryKey } from "./appLogic";
+import { episodePlaybackContext, findKnownItem, libraryKey, relativeEpisodeId } from "./appLogic";
 import "./App.css";
 
 type HistoryEntry = {
@@ -141,6 +141,7 @@ function App() {
   const chromeVisibleRef = useRef(true);
   const optimisticUntil = useRef(0);
   const resumedPlaybackSession = useRef("");
+  const playRelativeEpisodeRef = useRef<(offset: -1 | 1, stopCurrent?: boolean) => Promise<void>>(async () => {});
   const refreshAfterPlaybackStopRef = useRef<(itemId?: string | null, targetView?: View) => void>(() => {});
 
   const activeServer = useMemo(
@@ -148,6 +149,11 @@ function App() {
     [servers],
   );
   const resolvedSettings = useMemo(() => withAppSettingsDefaults(settings), [settings]);
+  const resolvedSettingsRef = useRef<ResolvedAppSettings>(resolvedSettings);
+
+  useEffect(() => {
+    resolvedSettingsRef.current = resolvedSettings;
+  }, [resolvedSettings]);
 
   useEffect(() => {
     if (resolvedSettings.metadataCacheEnabled) return;
@@ -351,6 +357,15 @@ function App() {
         }
         if (event.payload.failed) {
           setError("mpv 播放异常退出。");
+        }
+        if (
+          event.payload.completed
+          && resolvedSettingsRef.current.autoplayNextEpisode
+          && relativeEpisodeId(episodeContextFromView(currentView), 1)
+        ) {
+          void playRelativeEpisodeRef.current(1, false);
+          refreshAfterPlaybackStopRef.current(event.payload.itemId);
+          return;
         }
         const previousView = viewHistory.current[viewHistory.current.length - 1]?.view ?? { name: "home" as const };
         goBack();
@@ -700,7 +715,7 @@ function App() {
     setView({ name: "library", id: view.id, itemType, sortBy, sortOrder });
   }
 
-  async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[]) {
+  async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) {
     const title = detail?.item.id === itemId
       ? detail.item.name
       : findKnownItem(itemId, home, library, detail)?.name ?? "正在播放";
@@ -709,6 +724,8 @@ function App() {
     setPlaybackState(null);
     if (sources?.length) {
       setPlayerSources(sources);
+    } else {
+      setPlayerSources([]);
     }
     setSearchQuery("");
     setSearchOpen(false);
@@ -728,16 +745,42 @@ function App() {
     );
     if (result) {
       if (resolvedSettings.diagnosticsEnabled) setLastPlayResult(result);
-      openView({
+      const episodeContext = episodeIds ? episodePlaybackContext(result.itemId, episodeIds) : null;
+      const playerView: View = {
         name: "player",
         itemId: result.itemId,
         title,
         playSessionId: result.playSessionId,
         mediaSourceId: result.mediaSourceId ?? mediaSourceId ?? null,
         subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
-      });
+        episodeIds: episodeContext?.episodeIds ?? null,
+        episodeIndex: episodeContext?.episodeIndex ?? null,
+      };
+      if (viewRef.current.name === "player") {
+        setView(playerView);
+      } else {
+        openView(playerView);
+      }
     }
   }
+
+  function episodeContextFromView(targetView: View = viewRef.current) {
+    if (targetView.name !== "player" || !targetView.episodeIds || targetView.episodeIndex === null || targetView.episodeIndex === undefined) return null;
+    return { episodeIds: targetView.episodeIds, episodeIndex: targetView.episodeIndex };
+  }
+
+  async function playRelativeEpisode(offset: -1 | 1, stopCurrent = true) {
+    const context = episodeContextFromView();
+    const nextItemId = relativeEpisodeId(context, offset);
+    if (!nextItemId) return;
+    const currentView = viewRef.current;
+    if (stopCurrent && currentView.name === "player" && currentView.playSessionId) {
+      exitingPlaybackSession.current = currentView.playSessionId;
+      void ipc.controlPlayback(currentView.playSessionId, "stop").catch(() => {});
+    }
+    await play(nextItemId, undefined, undefined, undefined, undefined, context?.episodeIds);
+  }
+  playRelativeEpisodeRef.current = playRelativeEpisode;
 
   async function switchPlayerSource(sourceId?: string) {
     if (view.name !== "player") return;
@@ -776,6 +819,8 @@ function App() {
         playSessionId: result.playSessionId,
         mediaSourceId: result.mediaSourceId ?? nextSource.id,
         subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
+        episodeIds: view.episodeIds ?? null,
+        episodeIndex: view.episodeIndex ?? null,
       });
     }
   }
@@ -970,6 +1015,10 @@ function App() {
             onToggleFullscreen={() => void toggleFullscreen()}
             onClose={() => void getCurrentWindow().close()}
             onCommand={(command) => controlPlayback(view.playSessionId, command)}
+            canPlayPrevious={!!relativeEpisodeId(episodeContextFromView(view), -1)}
+            canPlayNext={!!relativeEpisodeId(episodeContextFromView(view), 1)}
+            onPlayPrevious={() => playRelativeEpisode(-1)}
+            onPlayNext={() => playRelativeEpisode(1)}
             seekBackSeconds={resolvedSettings.seekBackSeconds}
             seekForwardSeconds={resolvedSettings.seekForwardSeconds}
             sources={playerSources}

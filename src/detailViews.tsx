@@ -41,7 +41,7 @@ export function DetailView({
   entryItemId: string;
   onBack: () => void;
   onOpenItem: (id: string) => void;
-  onPlay: (id: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[]) => Promise<void>;
+  onPlay: (id: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
 }) {
@@ -185,7 +185,7 @@ export function DetailView({
           </div>
           <p>{item.overview ?? "暂无简介"}</p>
           <div className="hero-actions">
-            <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources)}>
+            <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
               <SvgIcon name="play" />
               <span>播放</span>
             </button>
@@ -413,6 +413,10 @@ export function PlayerView({
   onToggleFullscreen,
   onClose,
   onCommand,
+  canPlayPrevious,
+  canPlayNext,
+  onPlayPrevious,
+  onPlayNext,
   seekBackSeconds,
   seekForwardSeconds,
   sources,
@@ -429,6 +433,10 @@ export function PlayerView({
   onToggleFullscreen: () => void;
   onClose: () => void;
   onCommand: (command: PlaybackCommand) => Promise<void>;
+  canPlayPrevious: boolean;
+  canPlayNext: boolean;
+  onPlayPrevious: () => Promise<void>;
+  onPlayNext: () => Promise<void>;
   seekBackSeconds: number;
   seekForwardSeconds: number;
   sources: MediaVersion[];
@@ -550,9 +558,11 @@ export function PlayerView({
         </div>
         <div className="player-main-actions">
           <button className="player-round caption-toggle" onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")} aria-label="字幕"><SvgIcon name="captions" /></button>
+          {canPlayPrevious && <button className="player-round" onClick={() => void onPlayPrevious()} aria-label="上一集"><SvgIcon name="back" /></button>}
           <button className="player-round seek-back" onClick={() => void onCommand("seek_back")} aria-label={`后退 ${seekBackSeconds} 秒`} title={`后退 ${seekBackSeconds} 秒`}><SvgIcon name="back" /></button>
           <button className="player-round pause-toggle" onClick={() => void onCommand("toggle_pause")} aria-label="暂停或继续"><SvgIcon name={state?.paused ? "play" : "pause"} /></button>
           <button className="player-round seek-forward" onClick={() => void onCommand("seek_forward")} aria-label={`前进 ${seekForwardSeconds} 秒`} title={`前进 ${seekForwardSeconds} 秒`}><SvgIcon name="next" /></button>
+          {canPlayNext && <button className="player-round" onClick={() => void onPlayNext()} aria-label="下一集"><SvgIcon name="next" /></button>}
           <button className="player-round more-toggle" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? "取消静音" : "静音"}><SvgIcon name="volume" /></button>
           <button className="player-round fullscreen-toggle" onClick={onToggleFullscreen} aria-label="全屏"><SvgIcon name="fullscreen" /></button>
         </div>

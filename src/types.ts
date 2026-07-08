@@ -4,7 +4,16 @@ export type View =
   | { name: "home" }
   | { name: "library"; id: string; itemType?: LibraryItemType; sortBy?: LibrarySortBy; sortOrder?: LibrarySortOrder }
   | { name: "detail"; id: string }
-  | { name: "player"; itemId: string; title: string; playSessionId?: string | null; mediaSourceId?: string | null; subtitleStreamIndex?: number | null };
+  | {
+      name: "player";
+      itemId: string;
+      title: string;
+      playSessionId?: string | null;
+      mediaSourceId?: string | null;
+      subtitleStreamIndex?: number | null;
+      episodeIds?: string[] | null;
+      episodeIndex?: number | null;
+    };
 
 export type LibraryItemType = "" | "Movie" | "Series" | "Episode" | "Video";
 export type LibrarySortBy = "DateCreated" | "SortName" | "PremiereDate" | "CommunityRating";
