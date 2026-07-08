@@ -139,9 +139,9 @@ export function HomeView({
             {featured.overview && <p>{featured.overview}</p>}
             <div className="feature-actions">
               <button className="feature-play" onClick={() => void onPlay(featured.id)}><span className="play-glyph" />播放</button>
-              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} />
+              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label="查看详情" />
               <button className="round-icon add-icon" />
-              <button className="round-icon next-icon" />
+              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label="下一张推荐" />
             </div>
           </div>
         )}

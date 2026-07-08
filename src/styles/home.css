@@ -150,6 +150,11 @@
   color: #050505;
 }
 
+.feature-actions .round-icon:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.82);
+  outline-offset: 3px;
+}
+
 .home-server-switch {
   position: fixed;
   top: var(--chrome-top);
@@ -689,4 +694,3 @@
     transform 0.16s var(--tv-ease),
     box-shadow 0.16s var(--tv-ease);
 }
-
