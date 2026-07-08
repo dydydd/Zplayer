@@ -21,6 +21,7 @@ struct PlaybackStoppedEvent {
     completed: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn watch_mpv_playback(
     app: AppHandle,
     server: SavedServer,

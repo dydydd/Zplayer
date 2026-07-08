@@ -159,6 +159,7 @@ fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &Li
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn get_library_items(
     client: &Client,
     server: &SavedServer,
@@ -1389,8 +1390,10 @@ mod tests {
             saved_at: 0,
             use_system_proxy: true,
         };
-        let mut item = ApiItem::default();
-        item.id = "item".to_string();
+        let mut item = ApiItem {
+            id: "item".to_string(),
+            ..Default::default()
+        };
         item.image_tags
             .insert("Primary".to_string(), "tag".to_string());
 

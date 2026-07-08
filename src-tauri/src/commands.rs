@@ -1,9 +1,9 @@
 use crate::api;
 use crate::models::{
     normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
-    HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryInput, LibraryLatestPayload,
-    LibraryFiltersInput, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary, PlayResult,
-    PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
+    HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryFiltersInput, LibraryInput,
+    LibraryLatestPayload, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary,
+    PlayResult, PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
     ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
     SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
     SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
@@ -201,28 +201,29 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
     let client = api::http_client(server.use_system_proxy)?;
     let libraries = api::fetch_libraries(&client, &server)?;
     let app_for_recent = app.clone();
-    let (library_latest, recommended_movies, recommended_shows, recent_items) = thread::scope(|scope| {
-        let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
-        let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
-        let recommended_shows =
-            scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
-        let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
+    let (library_latest, recommended_movies, recommended_shows, recent_items) =
+        thread::scope(|scope| {
+            let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
+            let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
+            let recommended_shows =
+                scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
+            let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
 
-        (
-            library_latest.join().unwrap_or_default(),
-            recommended_movies
-                .join()
-                .ok()
-                .and_then(Result::ok)
-                .unwrap_or_default(),
-            recommended_shows
-                .join()
-                .ok()
-                .and_then(Result::ok)
-                .unwrap_or_default(),
-            recent_items.join().unwrap_or_default(),
-        )
-    });
+            (
+                library_latest.join().unwrap_or_default(),
+                recommended_movies
+                    .join()
+                    .ok()
+                    .and_then(Result::ok)
+                    .unwrap_or_default(),
+                recommended_shows
+                    .join()
+                    .ok()
+                    .and_then(Result::ok)
+                    .unwrap_or_default(),
+                recent_items.join().unwrap_or_default(),
+            )
+        });
 
     Ok(HomeMorePayload {
         server_id: server.id,

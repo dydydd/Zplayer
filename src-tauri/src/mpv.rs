@@ -25,6 +25,7 @@ const DISABLE_MPV_UI_ARGS: &[&str] = &[
     "--osd-bar=no",
     "--osd-level=0",
 ];
+#[cfg(any(test, target_os = "windows"))]
 const EMBED_MPV_WINDOW_ARGS: &[&str] = &["--force-window=yes", "--no-border", "--ontop=no"];
 const MPV_ENGINE_ARGS: &[&str] = &["--no-ytdl", "--keep-open=no"];
 const MPV_SYNC_START_ARGS: &[&str] = &["--pause=yes"];
@@ -45,6 +46,7 @@ pub(crate) struct Launch {
     pub(crate) control_path: PathBuf,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn launch(
     app: &AppHandle,
     server: &SavedServer,

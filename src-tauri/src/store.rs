@@ -1,4 +1,6 @@
-use crate::models::{AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerStore};
+use crate::models::{
+    AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerStore,
+};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -251,9 +253,6 @@ mod tests {
             playback_preference_key(Some("series-1"), "episode-1"),
             "series:series-1"
         );
-        assert_eq!(
-            playback_preference_key(None, "movie-1"),
-            "item:movie-1"
-        );
+        assert_eq!(playback_preference_key(None, "movie-1"), "item:movie-1");
     }
 }

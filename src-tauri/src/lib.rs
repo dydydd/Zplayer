@@ -18,7 +18,7 @@ pub fn run() {
             tauri::WindowEvent::Resized(_)
             | tauri::WindowEvent::ScaleFactorChanged { .. }
             | tauri::WindowEvent::Focused(true) => {
-                mpv::restack_all(&window.app_handle());
+                mpv::restack_all(window.app_handle());
             }
             _ => {}
         })
