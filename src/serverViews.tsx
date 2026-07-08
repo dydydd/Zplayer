@@ -134,6 +134,7 @@ export function SettingsView({
           <Stepper label="默认音量" value={draft.defaultVolume} min={0} max={100} step={5} unit="%" onChange={(value) => update("defaultVolume", value)} />
           <Stepper label="快退秒数" value={draft.seekBackSeconds} min={5} max={60} step={5} unit="秒" onChange={(value) => update("seekBackSeconds", value)} />
           <Stepper label="快进秒数" value={draft.seekForwardSeconds} min={5} max={180} step={5} unit="秒" onChange={(value) => update("seekForwardSeconds", value)} />
+          <Toggle label="自动下一集" checked={draft.autoplayNextEpisode} onChange={(checked) => update("autoplayNextEpisode", checked)} />
           <label className="settings-field">
             mpv 路径
             <input className="settings-path-input" value={draft.mpvPath} onChange={(event) => update("mpvPath", event.target.value)} placeholder="默认：mpv/mpv.exe" />

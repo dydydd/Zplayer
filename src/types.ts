@@ -34,6 +34,7 @@ export type AppSettings = {
   metadataCacheEnabled?: boolean;
   theme?: AppTheme;
   diagnosticsEnabled?: boolean;
+  autoplayNextEpisode?: boolean;
 };
 
 export type ResolvedAppSettings = {
@@ -46,6 +47,7 @@ export type ResolvedAppSettings = {
   metadataCacheEnabled: boolean;
   theme: AppTheme;
   diagnosticsEnabled: boolean;
+  autoplayNextEpisode: boolean;
 };
 
 export const defaultAppSettings: ResolvedAppSettings = {
@@ -58,6 +60,7 @@ export const defaultAppSettings: ResolvedAppSettings = {
   metadataCacheEnabled: true,
   theme: "dark",
   diagnosticsEnabled: false,
+  autoplayNextEpisode: true,
 };
 
 export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedAppSettings {
@@ -73,6 +76,7 @@ export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedApp
     metadataCacheEnabled: settings.metadataCacheEnabled ?? defaultAppSettings.metadataCacheEnabled,
     theme: settings.theme ?? defaultAppSettings.theme,
     diagnosticsEnabled: settings.diagnosticsEnabled ?? defaultAppSettings.diagnosticsEnabled,
+    autoplayNextEpisode: settings.autoplayNextEpisode ?? defaultAppSettings.autoplayNextEpisode,
   };
 }
 

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +67,8 @@ pub(crate) struct ServerStore {
     pub(crate) servers: Vec<SavedServer>,
     #[serde(default)]
     pub(crate) settings: AppSettings,
+    #[serde(default)]
+    pub(crate) recent_plays: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -88,6 +91,8 @@ pub(crate) struct AppSettings {
     pub(crate) theme: String,
     #[serde(default)]
     pub(crate) diagnostics_enabled: bool,
+    #[serde(default = "default_true")]
+    pub(crate) autoplay_next_episode: bool,
 }
 
 impl Default for AppSettings {
@@ -102,6 +107,7 @@ impl Default for AppSettings {
             metadata_cache_enabled: default_true(),
             theme: default_theme(),
             diagnostics_enabled: false,
+            autoplay_next_episode: default_true(),
         }
     }
 }
@@ -118,6 +124,7 @@ pub(crate) struct SaveSettingsInput {
     pub(crate) metadata_cache_enabled: Option<bool>,
     pub(crate) theme: Option<String>,
     pub(crate) diagnostics_enabled: Option<bool>,
+    pub(crate) autoplay_next_episode: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -192,5 +199,6 @@ pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
             _ => default_theme(),
         },
         diagnostics_enabled: input.diagnostics_enabled.unwrap_or(false),
+        autoplay_next_episode: input.autoplay_next_episode.unwrap_or_else(default_true),
     }
 }

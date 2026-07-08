@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 const STORE_FILE: &str = "servers.json";
+const RECENT_PLAY_LIMIT: usize = 50;
 
 pub(crate) fn save_server(
     app: &AppHandle,
@@ -105,6 +106,34 @@ pub(crate) fn save_settings(app: &AppHandle, settings: AppSettings) -> Result<Ap
     Ok(settings)
 }
 
+fn updated_recent_plays(mut ids: Vec<String>, item_id: &str) -> Vec<String> {
+    ids.retain(|id| id != item_id);
+    ids.insert(0, item_id.to_string());
+    ids.truncate(RECENT_PLAY_LIMIT);
+    ids
+}
+
+pub(crate) fn remember_recent_play(
+    app: &AppHandle,
+    server_id: &str,
+    item_id: &str,
+) -> Result<(), String> {
+    let mut store = load_store(app)?;
+    let ids = store.recent_plays.remove(server_id).unwrap_or_default();
+    store
+        .recent_plays
+        .insert(server_id.to_string(), updated_recent_plays(ids, item_id));
+    save_store(app, &store)
+}
+
+pub(crate) fn recent_play_ids(app: &AppHandle, server_id: &str) -> Result<Vec<String>, String> {
+    Ok(load_store(app)?
+        .recent_plays
+        .get(server_id)
+        .cloned()
+        .unwrap_or_default())
+}
+
 pub(crate) fn server_summary(server: &SavedServer) -> SavedServerSummary {
     SavedServerSummary {
         id: server.id.clone(),
@@ -171,5 +200,15 @@ mod tests {
         });
 
         assert!(!summary.use_system_proxy);
+    }
+
+    #[test]
+    fn updated_recent_plays_dedupes_and_trims() {
+        let ids = (0..55).map(|index| format!("item-{index}")).collect();
+        let updated = updated_recent_plays(ids, "item-20");
+
+        assert_eq!(updated.first(), Some(&"item-20".to_string()));
+        assert_eq!(updated.len(), 50);
+        assert_eq!(updated.iter().filter(|id| *id == "item-20").count(), 1);
     }
 }

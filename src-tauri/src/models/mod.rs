@@ -44,6 +44,7 @@ mod tests {
         assert!(settings.metadata_cache_enabled);
         assert_eq!(settings.theme, "dark");
         assert!(!settings.diagnostics_enabled);
+        assert!(settings.autoplay_next_episode);
     }
 
     #[test]
@@ -58,6 +59,7 @@ mod tests {
             metadata_cache_enabled: Some(false),
             theme: Some("midnight".to_string()),
             diagnostics_enabled: Some(true),
+            autoplay_next_episode: Some(false),
         });
 
         assert_eq!(settings.mpv_path.as_deref(), Some("C:/mpv/mpv.exe"));
@@ -69,5 +71,6 @@ mod tests {
         assert!(!settings.metadata_cache_enabled);
         assert_eq!(settings.theme, "midnight");
         assert!(settings.diagnostics_enabled);
+        assert!(!settings.autoplay_next_episode);
     }
 }
