@@ -162,6 +162,13 @@ export function HomeView({
             className="hero-shelf"
             showProgress
           />
+          <MediaShelf
+            title="最近播放"
+            items={home?.recentItems ?? []}
+            onOpenItem={onOpenItem}
+            className="hero-shelf"
+            showProgress
+          />
       </section>
       <div className="home-shelves">
         {home?.libraries.length ? (

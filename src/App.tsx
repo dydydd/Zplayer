@@ -483,6 +483,7 @@ function App() {
           libraryLatest: more.libraryLatest,
           recommendedMovies: more.recommendedMovies,
           recommendedShows: more.recommendedShows,
+          recentItems: more.recentItems,
         };
         if (resolvedSettings.metadataCacheEnabled) homeCache.current.set(more.serverId, next);
         return next;

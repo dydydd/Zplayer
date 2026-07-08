@@ -184,6 +184,7 @@ fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
         recommended_movies: Vec::new(),
         recommended_shows: Vec::new(),
         resume_items,
+        recent_items: Vec::new(),
     })
 }
 
@@ -198,11 +199,13 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
     let server = store::active_server(&app)?;
     let client = api::http_client(server.use_system_proxy)?;
     let libraries = api::fetch_libraries(&client, &server)?;
-    let (library_latest, recommended_movies, recommended_shows) = thread::scope(|scope| {
+    let app_for_recent = app.clone();
+    let (library_latest, recommended_movies, recommended_shows, recent_items) = thread::scope(|scope| {
         let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
         let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
         let recommended_shows =
             scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
+        let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
 
         (
             library_latest.join().unwrap_or_default(),
@@ -216,6 +219,7 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
                 .ok()
                 .and_then(Result::ok)
                 .unwrap_or_default(),
+            recent_items.join().unwrap_or_default(),
         )
     });
 
@@ -224,6 +228,7 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
         library_latest,
         recommended_movies,
         recommended_shows,
+        recent_items,
     })
 }
 
@@ -275,6 +280,20 @@ fn load_recommended_movies(
             ("enableImageTypes", api::image_types()),
         ],
     )
+}
+
+fn load_recent_items(
+    app: &AppHandle,
+    client: &reqwest::blocking::Client,
+    server: &SavedServer,
+) -> Vec<crate::models::MediaItem> {
+    store::recent_play_ids(app, &server.id)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|id| api::get_item_raw(client, server, &id).ok())
+        .map(|item| api::map_item(server, item))
+        .take(16)
+        .collect()
 }
 
 #[tauri::command]
@@ -509,6 +528,7 @@ fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String
     let server = store::active_server(&app)?;
     let client = api::http_client(server.use_system_proxy)?;
     let item = api::resolve_playable_item(&client, &server, &input.item_id)?;
+    let _ = store::remember_recent_play(&app, &server.id, &item.id);
     let start_position_ticks = item
         .user_data
         .as_ref()

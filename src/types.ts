@@ -133,6 +133,7 @@ export type HomePayload = {
   recommendedMovies: MediaItem[];
   recommendedShows: MediaItem[];
   resumeItems: MediaItem[];
+  recentItems: MediaItem[];
 };
 
 export type HomeMorePayload = {
@@ -140,6 +141,7 @@ export type HomeMorePayload = {
   libraryLatest: LibraryLatestPayload[];
   recommendedMovies: MediaItem[];
   recommendedShows: MediaItem[];
+  recentItems: MediaItem[];
 };
 
 export type SearchPayload = {
