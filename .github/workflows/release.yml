@@ -33,59 +33,27 @@ on:
 permissions:
   contents: write
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  preflight:
-    name: Preflight
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build
-
-      - name: Run Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
-
   prepare:
     name: Prepare release
-    needs: preflight
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      ref: ${{ steps.ref.outputs.ref }}
     steps:
+      - name: Select ref
+        id: ref
+        run: echo "ref=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ steps.ref.outputs.ref }}
 
       - name: Set date version
         id: version
-        shell: bash
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
@@ -95,12 +63,13 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Create release tag
-        if: github.ref_type != 'tag'
-        shell: bash
         run: |
           tag="v${{ steps.version.outputs.version }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            exit 0
+          fi
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "$tag already exists"
+            echo "$tag already exists; reusing it"
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -108,77 +77,43 @@ jobs:
           git tag "$tag"
           git push origin "$tag"
 
-  publish:
-    name: Publish ${{ matrix.platform }}
+  build-linux:
+    name: Build Linux
     needs: prepare
-    runs-on: ${{ matrix.platform }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - ubuntu-22.04
-          - windows-latest
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+      version: ${{ needs.prepare.outputs.version }}
 
+  build-windows:
+    name: Build Windows
+    needs: prepare
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+      version: ${{ needs.prepare.outputs.version }}
+
+  publish:
+    name: Publish release
+    needs:
+      - prepare
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Download bundles
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          path: artifacts
+          merge-multiple: true
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          node-version: lts/*
-          cache: npm
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Stamp app version
-        shell: bash
-        env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          node - <<'NODE'
-          const fs = require("fs");
-          const version = process.env.RELEASE_VERSION;
-
-          for (const file of ["package.json", "package-lock.json"]) {
-            if (!fs.existsSync(file)) continue;
-            const json = JSON.parse(fs.readFileSync(file, "utf8"));
-            json.version = version;
-            if (json.packages?.[""]) json.packages[""].version = version;
-            fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
-          }
-
-          const tauriPath = "src-tauri/tauri.conf.json";
-          const tauri = JSON.parse(fs.readFileSync(tauriPath, "utf8"));
-          tauri.version = version;
-          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + "\n");
-
-          const cargoPath = "src-tauri/Cargo.toml";
-          const cargo = fs.readFileSync(cargoPath, "utf8").replace(/^version = ".*"$/m, `version = "${version}"`);
-          fs.writeFileSync(cargoPath, cargo);
-          NODE
-
-      - name: Build and upload Tauri bundles
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: npm run tauri
-          tagName: v${{ needs.prepare.outputs.version }}
-          releaseName: Zplayer v${{ needs.prepare.outputs.version }}
-          releaseBody: "Windows and Linux builds are attached below."
-          releaseDraft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
-          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
-          uploadWorkflowArtifacts: true
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: Zplayer v${{ needs.prepare.outputs.version }}
+          body: "Windows and Linux builds are attached below."
+          files: artifacts/*
+          overwrite_files: true
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft == 'true' }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease == 'true' }}

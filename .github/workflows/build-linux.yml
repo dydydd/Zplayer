@@ -1,0 +1,80 @@
+name: Build Linux
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils rpm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Stamp app version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const version = process.env.RELEASE_VERSION;
+
+          for (const file of ["package.json", "package-lock.json"]) {
+            if (!fs.existsSync(file)) continue;
+            const json = JSON.parse(fs.readFileSync(file, "utf8"));
+            json.version = version;
+            if (json.packages?.[""]) json.packages[""].version = version;
+            fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+          }
+
+          const tauriPath = "src-tauri/tauri.conf.json";
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, "utf8"));
+          tauri.version = version;
+          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + "\n");
+
+          const cargoPath = "src-tauri/Cargo.toml";
+          const cargo = fs.readFileSync(cargoPath, "utf8").replace(/^version = ".*"$/m, `version = "${version}"`);
+          fs.writeFileSync(cargoPath, cargo);
+          NODE
+
+      - name: Build Tauri bundles
+        run: npm run tauri -- build
+
+      - name: Upload Linux bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: zplayer-linux
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
