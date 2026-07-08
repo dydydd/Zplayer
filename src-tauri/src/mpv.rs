@@ -115,9 +115,15 @@ pub(crate) fn launch(
     }
     command.arg(stream_url);
 
-    let mut child = command
-        .spawn()
-        .map_err(|err| format!("Failed to launch mpv: {err}"))?;
+    let mut child = command.spawn().map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound
+            && mpv_path == Path::new(default_mpv_executable_name())
+        {
+            mpv_not_found_message()
+        } else {
+            format!("Failed to launch mpv: {err}")
+        }
+    })?;
     place_embedded_video_behind_webview(app, child.id());
     if let Some(status) = wait_for_early_exit(app, &mut child)? {
         let tail = read_log_tail(&log_path)
@@ -725,7 +731,7 @@ fn place_embedded_video_behind_webview_once(_app: &AppHandle, _process_id: u32) 
 
 #[cfg(not(target_os = "windows"))]
 fn add_embed_args(_app: &AppHandle, _command: &mut Command) -> Result<(), String> {
-    Err("Embedded mpv is currently only implemented on Windows.".to_string())
+    Ok(())
 }
 
 fn app_data_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -773,6 +779,33 @@ fn redact_secret(text: &str, secret: &str) -> String {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn default_mpv_executable_name() -> &'static str {
+    "mpv.exe"
+}
+
+#[cfg(not(target_os = "windows"))]
+fn default_mpv_executable_name() -> &'static str {
+    "mpv"
+}
+
+fn mpv_not_found_message() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        "mpv.exe was not found.".to_string()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        "mpv was not found. Install mpv or set the mpv path in settings.".to_string()
+    }
+}
+
+#[cfg(test)]
+fn platform_supports_embedding() -> bool {
+    cfg!(target_os = "windows")
+}
+
 fn find_mpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> {
     if let Some(path) = settings
         .mpv_path
@@ -790,21 +823,29 @@ fn find_mpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> 
         ));
     }
 
+    let executable_name = default_mpv_executable_name();
     let mut candidates = Vec::new();
     if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("mpv").join("mpv.exe"));
-        candidates.push(cwd.join("mpv.exe"));
-        candidates.push(cwd.join("..").join("mpv").join("mpv.exe"));
-        candidates.push(cwd.join("..").join("mpv.exe"));
+        candidates.push(cwd.join("mpv").join(executable_name));
+        candidates.push(cwd.join(executable_name));
+        candidates.push(cwd.join("..").join("mpv").join(executable_name));
+        candidates.push(cwd.join("..").join(executable_name));
     }
     if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join("mpv").join("mpv.exe"));
-        candidates.push(resource_dir.join("mpv.exe"));
+        candidates.push(resource_dir.join("mpv").join(executable_name));
+        candidates.push(resource_dir.join(executable_name));
     }
-    candidates
-        .into_iter()
-        .find(|path| path.exists())
-        .ok_or_else(|| "mpv.exe was not found.".to_string())
+    if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+        return Ok(path);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(PathBuf::from(executable_name))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Err(mpv_not_found_message())
+    }
 }
 
 fn find_mpv_config_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -1033,6 +1074,21 @@ mod tests {
     fn startup_check_is_short_enough_for_responsive_playback() {
         assert!(MPV_STARTUP_CHECK_MAX <= Duration::from_millis(300));
         assert!(MPV_STARTUP_CHECK_INTERVAL <= MPV_STARTUP_CHECK_MAX);
+    }
+
+    #[test]
+    fn default_mpv_executable_matches_current_platform() {
+        #[cfg(target_os = "windows")]
+        assert_eq!(default_mpv_executable_name(), "mpv.exe");
+
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(default_mpv_executable_name(), "mpv");
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn non_windows_embedding_is_noop() {
+        assert!(!platform_supports_embedding());
     }
 
     #[test]
