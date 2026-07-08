@@ -195,6 +195,37 @@ fn normalize_command(command: &str) -> Result<String, String> {
                 .clamp(0, 100);
             Ok(format!("volume_set:{volume}"))
         }
+        value if value.starts_with("speed_set:") => {
+            let speed = value
+                .trim_start_matches("speed_set:")
+                .parse::<f64>()
+                .map_err(|_| "Invalid playback speed.".to_string())?
+                .clamp(0.5, 2.0);
+            Ok(format!("speed_set:{speed:.2}"))
+        }
+        value if value.starts_with("audio_delay_set:") => {
+            let delay = value
+                .trim_start_matches("audio_delay_set:")
+                .parse::<f64>()
+                .map_err(|_| "Invalid audio delay.".to_string())?
+                .clamp(-10.0, 10.0);
+            Ok(format!("audio_delay_set:{delay:.3}"))
+        }
+        value if value.starts_with("subtitle_delay_set:") => {
+            let delay = value
+                .trim_start_matches("subtitle_delay_set:")
+                .parse::<f64>()
+                .map_err(|_| "Invalid subtitle delay.".to_string())?
+                .clamp(-10.0, 10.0);
+            Ok(format!("subtitle_delay_set:{delay:.3}"))
+        }
+        value if value.starts_with("external_subtitle:") => {
+            let target = value.trim_start_matches("external_subtitle:").trim();
+            if target.is_empty() {
+                return Err("Invalid external subtitle.".to_string());
+            }
+            Ok(format!("external_subtitle:{target}"))
+        }
         _ => Err("Unknown playback command.".to_string()),
     }
 }
@@ -482,7 +513,7 @@ local function read_control()
   local command = file:read("*a")
   file:close()
   os.remove(control_path)
-  command = command and command:gsub("%s+", "")
+  command = command and command:gsub("^%s+", ""):gsub("%s+$", "")
   if command == "toggle_pause" then
     mp.commandv("cycle", "pause")
   elseif command == "resume" then
@@ -522,6 +553,18 @@ local function read_control()
   elseif command == "speed_up" then
     local speed = math.min(2.0, mp.get_property_number("speed", 1) + 0.1)
     mp.set_property_number("speed", speed)
+  elseif command and command:match("^speed_set:") then
+    local speed = tonumber(command:match("^speed_set:(.+)$"))
+    if speed then mp.set_property_number("speed", speed) end
+  elseif command and command:match("^audio_delay_set:") then
+    local delay = tonumber(command:match("^audio_delay_set:(.+)$"))
+    if delay then mp.set_property_number("audio-delay", delay) end
+  elseif command and command:match("^subtitle_delay_set:") then
+    local delay = tonumber(command:match("^subtitle_delay_set:(.+)$"))
+    if delay then mp.set_property_number("sub-delay", delay) end
+  elseif command and command:match("^external_subtitle:") then
+    local target = command:match("^external_subtitle:(.+)$")
+    if target and #target > 0 then mp.commandv("sub-add", target, "select") end
   elseif command == "stop" then
     mp.commandv("quit")
   end
@@ -766,6 +809,27 @@ mod tests {
         assert_eq!(
             normalize_command("seek_absolute:-4").unwrap(),
             "seek_absolute:0.000"
+        );
+    }
+
+    #[test]
+    fn normalizes_professional_playback_commands() {
+        assert_eq!(
+            normalize_command("speed_set:1.25").unwrap(),
+            "speed_set:1.25"
+        );
+        assert_eq!(normalize_command("speed_set:9").unwrap(), "speed_set:2.00");
+        assert_eq!(
+            normalize_command("audio_delay_set:-0.250").unwrap(),
+            "audio_delay_set:-0.250"
+        );
+        assert_eq!(
+            normalize_command("subtitle_delay_set:0.500").unwrap(),
+            "subtitle_delay_set:0.500"
+        );
+        assert_eq!(
+            normalize_command("external_subtitle:C:/subs/movie.srt").unwrap(),
+            "external_subtitle:C:/subs/movie.srt"
         );
     }
 
