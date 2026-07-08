@@ -21,6 +21,7 @@ type PlaybackStoppedEvent = {
   itemId: string;
   playSessionId: string;
   failed: boolean;
+  completed: boolean;
 };
 
 type SubtitleSelection = {

@@ -18,6 +18,7 @@ struct PlaybackStoppedEvent {
     item_id: String,
     play_session_id: String,
     failed: bool,
+    completed: bool,
 }
 
 pub(crate) fn watch_mpv_playback(
@@ -85,6 +86,8 @@ pub(crate) fn watch_mpv_playback(
         match child.try_wait() {
             Ok(Some(status)) => {
                 let failed = !status.success();
+                let explicit_stop = mpv::take_explicit_stop(&play_session_id);
+                let completed = playback_completed(progress.as_ref(), failed, explicit_stop);
                 if let Some(client) = client.clone() {
                     let final_ticks =
                         final_position_ticks(progress.as_ref(), last_ticks, start_position_ticks);
@@ -119,6 +122,7 @@ pub(crate) fn watch_mpv_playback(
                         item_id,
                         play_session_id,
                         failed,
+                        completed,
                     },
                 );
                 break;
@@ -149,6 +153,26 @@ fn final_position_ticks(
         .filter(|ticks| *ticks > 0)
         .or(last_ticks)
         .or(start_position_ticks)
+}
+
+fn playback_completed(
+    progress: Option<&PlaybackStateResult>,
+    failed: bool,
+    explicit_stop: bool,
+) -> bool {
+    if failed || explicit_stop {
+        return false;
+    }
+    let Some(progress) = progress else {
+        return false;
+    };
+    let Some(duration) = progress.duration.filter(|duration| *duration > 0.0) else {
+        return false;
+    };
+    progress
+        .time_pos
+        .map(|time| time / duration >= 0.90)
+        .unwrap_or(false)
 }
 
 pub(crate) fn play_session_id(item_id: &str) -> String {
@@ -203,5 +227,41 @@ mod tests {
             final_position_ticks(Some(&progress), None, Some(90_000_000)),
             Some(90_000_000)
         );
+    }
+
+    #[test]
+    fn completion_requires_success_and_90_percent_progress() {
+        let progress = PlaybackStateResult {
+            time_pos: Some(91.0),
+            duration: Some(100.0),
+            paused: false,
+            muted: false,
+            volume: Some(100),
+            video_ready: true,
+        };
+
+        assert!(playback_completed(Some(&progress), false, false));
+        assert!(!playback_completed(Some(&progress), true, false));
+        assert!(!playback_completed(Some(&progress), false, true));
+    }
+
+    #[test]
+    fn completion_rejects_short_or_missing_duration() {
+        let short = PlaybackStateResult {
+            time_pos: Some(50.0),
+            duration: Some(100.0),
+            paused: false,
+            muted: false,
+            volume: Some(100),
+            video_ready: true,
+        };
+        let missing_duration = PlaybackStateResult {
+            duration: None,
+            ..short.clone()
+        };
+
+        assert!(!playback_completed(Some(&short), false, false));
+        assert!(!playback_completed(Some(&missing_duration), false, false));
+        assert!(!playback_completed(None, false, false));
     }
 }

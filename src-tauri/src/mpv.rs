@@ -1,6 +1,6 @@
 use crate::models::{AppSettings, PlayResult, PlaybackStateResult, SavedServer};
 use crate::store;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -17,6 +17,7 @@ static CONTROL_PATHS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new(
 static PROGRESS_PATHS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
 static PROGRESS_STATES: OnceLock<Mutex<HashMap<String, PlaybackStateResult>>> = OnceLock::new();
 static PROCESS_IDS: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+static EXPLICIT_STOPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 const DISABLE_MPV_UI_ARGS: &[&str] = &[
     "--input-default-bindings=no",
     "--input-vo-keyboard=no",
@@ -158,6 +159,9 @@ pub(crate) fn control(play_session_id: &str, command: &str) -> Result<(), String
         .cloned()
         .ok_or_else(|| "Playback session is not active.".to_string())?;
     let command = normalize_command(command)?;
+    if command == "stop" {
+        remember_explicit_stop(play_session_id);
+    }
     fs::write(path, command).map_err(|err| format!("Failed to send playback command: {err}"))
 }
 
@@ -220,6 +224,28 @@ pub(crate) fn forget_control(play_session_id: &str) {
             ids.remove(play_session_id);
         }
     }
+    if let Some(stops) = EXPLICIT_STOPS.get() {
+        if let Ok(mut stops) = stops.lock() {
+            stops.remove(play_session_id);
+        }
+    }
+}
+
+fn remember_explicit_stop(play_session_id: &str) {
+    if let Ok(mut stops) = EXPLICIT_STOPS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+    {
+        stops.insert(play_session_id.to_string());
+    }
+}
+
+pub(crate) fn take_explicit_stop(play_session_id: &str) -> bool {
+    EXPLICIT_STOPS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .map(|mut stops| stops.remove(play_session_id))
+        .unwrap_or(false)
 }
 
 pub(crate) fn stop_all() {
