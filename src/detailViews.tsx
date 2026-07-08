@@ -457,12 +457,18 @@ export function PlayerView({
   const lastControlsShownAt = useRef(0);
   const onCommandRef = useRef(onCommand);
   const onExitRef = useRef(onExit);
+  const onToggleFullscreenRef = useRef(onToggleFullscreen);
+  const onPlayPreviousRef = useRef(onPlayPrevious);
+  const onPlayNextRef = useRef(onPlayNext);
   const selectedAudio = currentSource?.audioStreams.find((stream) => stream.index === audioIndex) ?? currentSource?.audioStreams[0];
   const selectedSubtitle = currentSource?.subtitleStreams.find((stream) => stream.index === subtitleIndex) ?? currentSource?.subtitleStreams[0];
 
   useEffect(() => {
     onCommandRef.current = onCommand;
     onExitRef.current = onExit;
+    onToggleFullscreenRef.current = onToggleFullscreen;
+    onPlayPreviousRef.current = onPlayPrevious;
+    onPlayNextRef.current = onPlayNext;
   });
 
   useEffect(() => {
@@ -485,12 +491,26 @@ export function PlayerView({
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select")) return;
+      if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        onToggleFullscreenRef.current();
+        return;
+      }
+      if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && event.shiftKey) {
+        event.preventDefault();
+        void (event.key === "ArrowLeft" ? onPlayPreviousRef.current() : onPlayNextRef.current());
+        return;
+      }
       const commands: Record<string, PlaybackCommand> = {
         " ": "toggle_pause",
         ArrowLeft: "seek_back",
         ArrowRight: "seek_forward",
         ArrowDown: "volume_down",
         ArrowUp: "volume_up",
+        a: "audio_next",
+        A: "audio_next",
+        s: "subtitle_next",
+        S: "subtitle_next",
         m: "toggle_mute",
         M: "toggle_mute",
         "[": "speed_down",

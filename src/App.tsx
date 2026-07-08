@@ -121,6 +121,14 @@ function App() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [recentSearchTerms, setRecentSearchTerms] = useState<string[]>(() => {
+    try {
+      const terms = JSON.parse(localStorage.getItem("zplayer:recent-searches") ?? "[]");
+      return Array.isArray(terms) ? terms.slice(0, 8) : [];
+    } catch {
+      return [];
+    }
+  });
   const [lastPlayResult, setLastPlayResult] = useState<PlayResult | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<ServerForm>(emptyForm);
@@ -897,15 +905,31 @@ function App() {
   const openLibrary = useCallback((id: string) => openView({ name: "library", id }), [openView]);
   const openDetail = useCallback((id: string) => openView({ name: "detail", id }), [openView]);
 
+  function rememberSearchTerm(query: string) {
+    const term = query.trim();
+    if (!term) return;
+    setRecentSearchTerms((current) => {
+      const next = [term, ...current.filter((value) => value !== term)].slice(0, 8);
+      try {
+        localStorage.setItem("zplayer:recent-searches", JSON.stringify(next));
+      } catch {
+        // ponytail: recent searches are convenience state; keep UI usable if storage is blocked.
+      }
+      return next;
+    });
+  }
+
   const openSearchResult = useCallback((itemId: string) => {
+    rememberSearchTerm(searchQuery);
     setSearchQuery("");
     setSearchOpen(false);
     openDetail(itemId);
-  }, [openDetail]);
+  }, [openDetail, searchQuery]);
 
   const detailMatchesView = view.name === "detail" && !!detail && (
     detail.item.id === view.id || detail.episodes.some((episode) => episode.id === view.id)
   );
+  const showContent = !searchOpen && !searchQuery.trim();
 
   return (
     <main className={`app theme-${resolvedSettings.theme}`}>
@@ -932,17 +956,22 @@ function App() {
         {loading && <div className="status">{loading}...</div>}
         {error && <div className="error">{error}</div>}
 
-        {view.name !== "player" && searchQuery.trim() && (
+        {view.name !== "player" && searchOpen && (
           <SearchOverlay
             results={searchResults}
             query={searchQuery}
             loading={searchLoading}
             posterDensity={resolvedSettings.posterDensity}
+            recentTerms={recentSearchTerms}
+            onUseRecentTerm={(term) => {
+              setSearchQuery(term);
+              setSearchOpen(true);
+            }}
             onOpen={openSearchResult}
           />
         )}
 
-        {!searchQuery.trim() && view.name === "servers" && (
+        {showContent && view.name === "servers" && (
           <ServerView
             servers={servers}
             onAdd={() => setModalOpen(true)}
@@ -952,7 +981,7 @@ function App() {
             onBack={goBack}
           />
         )}
-        {!searchQuery.trim() && view.name === "settings" && (
+        {showContent && view.name === "settings" && (
           <SettingsView
             settings={settings}
             lastPlayResult={resolvedSettings.diagnosticsEnabled ? lastPlayResult : null}
@@ -960,7 +989,7 @@ function App() {
             onSaveSettings={saveSettings}
           />
         )}
-        {!searchQuery.trim() && view.name === "home" && (
+        {showContent && view.name === "home" && (
           <HomeView
             home={home}
             activeServer={activeServer}
@@ -977,7 +1006,7 @@ function App() {
             chromeVisible={chromeVisible}
           />
         )}
-        {!searchQuery.trim() && view.name === "library" && library?.library.id === view.id && (
+        {showContent && view.name === "library" && library?.library.id === view.id && (
           <LibraryView
             payload={library}
             loadingMore={libraryLoadingMore}
@@ -991,8 +1020,8 @@ function App() {
             onOptionsChange={updateLibraryOptions}
           />
         )}
-        {!searchQuery.trim() && view.name === "library" && library?.library.id !== view.id && <LoadingPage />}
-        {!searchQuery.trim() && detailMatchesView && detail && (
+        {showContent && view.name === "library" && library?.library.id !== view.id && <LoadingPage />}
+        {showContent && detailMatchesView && detail && (
           <DetailView
             payload={detail}
             entryItemId={view.name === "detail" ? view.id : detail.item.id}
@@ -1003,7 +1032,7 @@ function App() {
             onError={setError}
           />
         )}
-        {!searchQuery.trim() && view.name === "detail" && !detailMatchesView && <LoadingPage />}
+        {showContent && view.name === "detail" && !detailMatchesView && <LoadingPage />}
         {view.name === "player" && (
           <PlayerView
             title={view.title}

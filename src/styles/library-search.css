@@ -261,6 +261,28 @@
   font-size: 18px;
 }
 
+.search-recents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 34px;
+}
+
+.search-recents button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+  font-weight: 900;
+}
+
+.search-recents button:hover,
+.search-recents button:focus-visible {
+  background: var(--glass-bg-hover);
+}
+
 .search-page {
   background:
     radial-gradient(circle at 72% 12%, rgba(90, 110, 142, 0.18), transparent 32%),
@@ -343,4 +365,3 @@
   font-size: 14px;
   font-weight: 900;
 }
-

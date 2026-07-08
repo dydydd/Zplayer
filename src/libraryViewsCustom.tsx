@@ -147,21 +147,40 @@ export function SearchOverlay({
   query,
   loading,
   posterDensity,
+  recentTerms,
+  onUseRecentTerm,
   onOpen,
 }: {
   results: MediaItem[];
   query: string;
   loading: boolean;
   posterDensity: PosterDensity;
+  recentTerms: string[];
+  onUseRecentTerm: (term: string) => void;
   onOpen: (id: string) => void;
 }) {
+  const trimmedQuery = query.trim();
+
   return (
     <div className="page search-page">
       <h1>搜索</h1>
       <p className="search-count">
-        {loading ? "搜索中..." : results.length ? `找到 ${results.length} 个结果` : `没有找到“${query}”`}
+        {!trimmedQuery
+          ? "最近搜索"
+          : loading
+            ? "搜索中..."
+            : results.length
+              ? `找到 ${results.length} 个结果`
+              : `没有找到“${query}”`}
       </p>
-      {!loading && !results.length && <div className="empty-panel">换个关键词试试</div>}
+      {!trimmedQuery && recentTerms.length > 0 && (
+        <div className="search-recents">
+          {recentTerms.map((term) => (
+            <button key={term} onClick={() => onUseRecentTerm(term)}>{term}</button>
+          ))}
+        </div>
+      )}
+      {!loading && trimmedQuery && !results.length && <div className="empty-panel">换个关键词试试</div>}
       <div className={`poster-grid poster-density-${posterDensity} ${loading ? "is-loading" : ""}`}>
         {results.map((item) => (
           <Poster key={item.id} item={item} onOpen={onOpen} />
