@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTranslation } from "react-i18next";
 
 type TopBarProps = {
   searchOpen: boolean;
@@ -18,22 +19,24 @@ export function TopBar({
   onSearchQueryChange,
   onToggleSearch,
 }: TopBarProps) {
+  const { t } = useTranslation();
+
   return (
     <header className={`topbar chrome-float ${searchOpen ? "search-open" : ""} ${chromeVisible ? "" : "hidden"}`}>
       {searchOpen && (
-        <label className="search" title="搜索">
+        <label className="search" title={t("topbar.search")}>
           <input
             ref={searchInputRef}
             value={searchQuery}
             onChange={(event) => onSearchQueryChange(event.target.value)}
-            placeholder="搜索"
+            placeholder={t("topbar.search")}
           />
         </label>
       )}
-      <button className="icon-btn search-btn" title="搜索" onClick={onToggleSearch} />
-      <button className="icon-btn min-btn" title="最小化" onClick={() => void getCurrentWindow().minimize()} />
-      <button className="icon-btn max-btn" title="最大化" onClick={() => void getCurrentWindow().toggleMaximize()} />
-      <button className="icon-btn close-btn" title="关闭" onClick={() => void getCurrentWindow().close()} />
+      <button className="icon-btn search-btn" title={t("topbar.search")} onClick={onToggleSearch} />
+      <button className="icon-btn min-btn" title={t("topbar.minimize")} onClick={() => void getCurrentWindow().minimize()} />
+      <button className="icon-btn max-btn" title={t("topbar.maximize")} onClick={() => void getCurrentWindow().toggleMaximize()} />
+      <button className="icon-btn close-btn" title={t("common.close")} onClick={() => void getCurrentWindow().close()} />
     </header>
   );
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LoginResult, ServerForm } from "./types";
 
 type ServerModalProps = {
@@ -25,6 +26,8 @@ export function ServerModal({
   onTogglePassword,
   onUpdateForm,
 }: ServerModalProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="modal-backdrop">
       <form
@@ -34,20 +37,20 @@ export function ServerModal({
           onSubmit();
         }}
       >
-        <button type="button" className="close" onClick={onClose} title="关闭">
+        <button type="button" className="close" onClick={onClose} title={t("common.close")}>
           x
         </button>
-        <h2>{editingServerId ? "重新登录服务器" : "添加服务器"}</h2>
+        <h2>{editingServerId ? t("modal.editTitle") : t("modal.addTitle")}</h2>
         <label>
-          名称（选填）
+          {t("modal.name")}
           <input
             value={form.name}
             onChange={(event) => onUpdateForm("name", event.target.value)}
-            placeholder="登录检测后自动获取"
+            placeholder={t("modal.namePlaceholder")}
           />
         </label>
         <label>
-          服务器类型
+          {t("modal.serverType")}
           <div className="server-type-row">
             <button
               type="button"
@@ -66,7 +69,7 @@ export function ServerModal({
           </div>
         </label>
         <label>
-          Emby/Jellyfin 服务器
+          {t("modal.serverUrl")}
           <input
             value={form.url}
             onChange={(event) => onUpdateForm("url", event.target.value)}
@@ -75,11 +78,11 @@ export function ServerModal({
           />
         </label>
         <label>
-          用户
+          {t("modal.username")}
           <input value={form.username} onChange={(event) => onUpdateForm("username", event.target.value)} />
         </label>
         <label>
-          密码
+          {t("modal.password")}
           <div className="password-row">
             <input
               type={showPassword ? "text" : "password"}
@@ -87,7 +90,7 @@ export function ServerModal({
               onChange={(event) => onUpdateForm("password", event.target.value)}
             />
             <button type="button" onClick={onTogglePassword}>
-              {showPassword ? "隐藏" : "显示"}
+              {showPassword ? t("modal.hidePassword") : t("modal.showPassword")}
             </button>
           </div>
         </label>
@@ -97,15 +100,15 @@ export function ServerModal({
             checked={form.useSystemProxy}
             onChange={(event) => onUpdateForm("useSystemProxy", event.target.checked)}
           />
-          启用系统代理
+          {t("modal.systemProxy")}
         </label>
         <div className="modal-actions">
-          <span>{testedLogin ? "登录检测已通过" : "请先通过登录检测"}</span>
+          <span>{testedLogin ? t("modal.loginPassed") : t("modal.loginRequired")}</span>
           <button type="button" onClick={onTestLogin}>
-            登录检测
+            {t("modal.testLogin")}
           </button>
           <button type="submit" disabled={!testedLogin}>
-            保存
+            {t("common.save")}
           </button>
         </div>
       </form>

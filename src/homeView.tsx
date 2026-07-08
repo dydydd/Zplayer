@@ -1,4 +1,5 @@
 ﻿import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { bg, itemMeta } from "./media";
 import { rotateDaily } from "./viewLogic";
@@ -35,6 +36,7 @@ export function HomeView({
   setServerMenuOpen: (open: boolean) => void;
   chromeVisible: boolean;
 }) {
+  const { t } = useTranslation();
   const [heroIndex, setHeroIndex] = useState(0);
   const longPressTimer = useRef<number | null>(null);
   const heroItems = useMemo(() => {
@@ -76,8 +78,8 @@ export function HomeView({
     return (
       <div className="empty">
         <h1>Zplayer</h1>
-        <p>先添加一个 Emby 或 Jellyfin 服务器。</p>
-        <button onClick={onAddServer}>添加服务器</button>
+        <p>{t("home.emptyServer")}</p>
+        <button onClick={onAddServer}>{t("home.addServer")}</button>
       </div>
     );
   }
@@ -94,7 +96,7 @@ export function HomeView({
             event.preventDefault();
             setServerMenuOpen(true);
           }}
-          title="切换媒体服务器"
+          title={t("home.serverSwitchTitle")}
         >
           <span className="home-icon play-icon" />
           {activeServer.name}
@@ -116,19 +118,19 @@ export function HomeView({
             <button onClick={() => {
               setServerMenuOpen(false);
               onAddServer();
-            }}>添加服务器</button>
+            }}>{t("home.addServer")}</button>
             <button onClick={() => {
               setServerMenuOpen(false);
               onOpenServers();
-            }}>服务器管理</button>
+            }}>{t("home.serverManage")}</button>
             <button onClick={() => {
               setServerMenuOpen(false);
               onOpenFavorites();
-            }}>收藏</button>
+            }}>{t("home.favorites")}</button>
             <button onClick={() => {
               setServerMenuOpen(false);
               onOpenSettings();
-            }}>设置</button>
+            }}>{t("home.settings")}</button>
           </div>
         )}
       </div>
@@ -144,10 +146,10 @@ export function HomeView({
             <small>{itemMeta(featured)}</small>
             {featured.overview && <p>{featured.overview}</p>}
             <div className="feature-actions">
-              <button className="feature-play" onClick={() => void onPlay(featured.id)}><span className="play-glyph" />播放</button>
-              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label="查看详情" />
-              <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label="打开收藏" />
-              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label="下一张推荐" />
+              <button className="feature-play" onClick={() => void onPlay(featured.id)}><span className="play-glyph" />{t("home.play")}</button>
+              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label={t("home.detail")} />
+              <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label={t("home.openFavorites")} />
+              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label={t("home.nextRecommendation")} />
             </div>
           </div>
         )}
@@ -157,19 +159,19 @@ export function HomeView({
                 key={item.id}
                 className={index === heroIndex % Math.max(heroItems.length, 1) ? "active" : ""}
                 onClick={() => setHeroIndex(index)}
-                aria-label={`切换到第 ${index + 1} 张推荐`}
+                aria-label={t("home.recommendationDot", { index: index + 1 })}
               />
             ))}
           </div>
           <MediaShelf
-            title="继续播放"
+            title={t("home.continueWatching")}
             items={home?.resumeItems ?? []}
             onOpenItem={onOpenItem}
             className="hero-shelf"
             showProgress
           />
           <MediaShelf
-            title="最近播放"
+            title={t("home.recentPlayed")}
             items={home?.recentItems ?? []}
             onOpenItem={onOpenItem}
             className="hero-shelf"
@@ -177,7 +179,7 @@ export function HomeView({
           />
       </section>
       {home && !home.resumeItems.length && !home.libraries.length && !home.libraryLatest.length && (
-        <EmptyState title="这个服务器暂时没有可显示的媒体" onAction={onOpenServers} actionLabel="服务器管理" />
+        <EmptyState title={t("home.noMedia")} onAction={onOpenServers} actionLabel={t("home.serverManage")} />
       )}
       <div className="home-shelves">
         {home?.libraries.length ? (
@@ -207,9 +209,11 @@ const LibraryShelf = memo(function LibraryShelf({
   libraries: HomePayload["libraries"];
   onOpenLibrary: (id: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="home-shelf">
-      <ShelfHeader title="媒体库" showControls={false} />
+      <ShelfHeader title={t("home.libraries")} showControls={false} />
       <ScrollableStage rowClassName="media-row" itemCount={libraries.length} scrollKey="home:libraries">
           {libraries.map((library) => (
             <button key={library.id} className="library-tile" style={bg(library.imageUrl)} onClick={() => onOpenLibrary(library.id)}>

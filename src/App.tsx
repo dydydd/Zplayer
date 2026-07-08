@@ -3,7 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { useLayoutEffect } from "react";
 import { useDeferredValue } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTranslation } from "react-i18next";
 import { ipc } from "./ipc";
+import { applyLanguage } from "./i18n";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
@@ -111,6 +113,7 @@ function resolveSubtitleSelection(source: MediaVersion | undefined, subtitleStre
 }
 
 function App() {
+  const { t } = useTranslation();
   const [view, setView] = useState<View>({ name: "home" });
   const [servers, setServers] = useState<SavedServer[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
@@ -171,6 +174,10 @@ function App() {
   useEffect(() => {
     resolvedSettingsRef.current = resolvedSettings;
   }, [resolvedSettings]);
+
+  useEffect(() => {
+    void applyLanguage(resolvedSettings.language);
+  }, [resolvedSettings.language]);
 
   useEffect(() => {
     if (resolvedSettings.metadataCacheEnabled) return;
@@ -385,7 +392,7 @@ function App() {
           return;
         }
         if (event.payload.failed) {
-          setError("mpv 播放异常退出。");
+          setError(t("errors.mpvExited"));
         }
         if (
           event.payload.completed
@@ -412,7 +419,7 @@ function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, []);
+  }, [t]);
 
   async function run<T>(label: string, action: () => Promise<T>) {
     setLoading(label);
@@ -431,7 +438,7 @@ function App() {
   }
 
   async function refreshServers() {
-    const result = await run("加载服务器", () =>
+    const result = await run(t("loading.servers"), () =>
       ipc.listServers(),
     );
     if (result) {
@@ -443,14 +450,14 @@ function App() {
   }
 
   async function loadSettings() {
-    const result = await run("加载设置", () => ipc.loadSettings());
+    const result = await run(t("loading.settings"), () => ipc.loadSettings());
     if (result) {
       setSettings(result);
     }
   }
 
   async function saveSettings(next: AppSettings) {
-    const result = await run("保存设置", () => ipc.saveSettings(withAppSettingsDefaults(next)));
+    const result = await run(t("common.save"), () => ipc.saveSettings(withAppSettingsDefaults(next)));
     if (result) {
       setSettings(result);
     }
@@ -509,7 +516,7 @@ function App() {
       return;
     }
     const currentRequest = ++requestId.current;
-    const result = await run("加载首页", () => ipc.loadHome());
+    const result = await run(t("loading.home"), () => ipc.loadHome());
     if (result && currentRequest === requestId.current) {
       if (resolvedSettings.metadataCacheEnabled) homeCache.current.set(result.server.id, result);
       setHome(result);
@@ -547,7 +554,7 @@ function App() {
       return;
     }
     const currentRequest = ++requestId.current;
-    const result = await run("加载媒体库", () =>
+    const result = await run(t("loading.library"), () =>
       ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder, filters),
     );
     if (result && currentRequest === requestId.current) {
@@ -626,7 +633,7 @@ function App() {
       detailCache.current.delete(itemId);
     }
     const currentRequest = ++requestId.current;
-    const result = await run("加载详情", () =>
+    const result = await run(t("loading.detail"), () =>
       ipc.loadItem(itemId),
     );
     if (result && currentRequest === requestId.current) {
@@ -672,7 +679,7 @@ function App() {
   async function testLogin() {
     const serverName = await fetchServerName();
     const input = serverName ? { ...form, name: serverName } : form;
-    const result = await run("登录检测", () =>
+    const result = await run(t("loading.loginTest"), () =>
       ipc.testServerLogin(input),
     );
     if (result) {
@@ -685,7 +692,7 @@ function App() {
     if (!testedLogin) {
       return;
     }
-    const result = await run("保存服务器", () =>
+    const result = await run(t("loading.saveServer"), () =>
       ipc.saveServer(testedLogin),
     );
     if (result) {
@@ -704,7 +711,7 @@ function App() {
   }
 
   async function activateServer(serverId: string) {
-    const result = await run("切换服务器", () =>
+    const result = await run(t("loading.switchServer"), () =>
       ipc.setActiveServer(serverId),
     );
     if (result) {
@@ -722,7 +729,7 @@ function App() {
   }
 
   async function deleteServer(serverId: string) {
-    const result = await run("删除服务器", () =>
+    const result = await run(t("loading.deleteServer"), () =>
       ipc.deleteServer(serverId),
     );
     if (result !== null) {
@@ -758,7 +765,7 @@ function App() {
 
   async function toggleItemFavorite(item: MediaItem) {
     const nextValue = !item.favorite;
-    const result = await run(nextValue ? "收藏媒体" : "取消收藏", () => ipc.markFavorite(item.id, nextValue));
+    const result = await run(nextValue ? t("loading.favoriteMedia") : t("loading.unfavoriteMedia"), () => ipc.markFavorite(item.id, nextValue));
     if (result !== null) {
       invalidatePlaybackCaches(item.id);
       if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
@@ -767,7 +774,7 @@ function App() {
 
   async function toggleItemPlayed(item: MediaItem) {
     const nextValue = !item.played;
-    const result = await run(nextValue ? "标记已看" : "标记未看", () => ipc.markPlayed(item.id, nextValue));
+    const result = await run(nextValue ? t("loading.markPlayed") : t("loading.markUnplayed"), () => ipc.markPlayed(item.id, nextValue));
     if (result !== null) {
       invalidatePlaybackCaches(item.id);
       if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
@@ -778,7 +785,7 @@ function App() {
     const knownItem = findKnownItem(itemId, home, library, detail);
     const title = detail?.item.id === itemId
       ? detail.item.name
-      : knownItem?.name ?? "正在播放";
+      : knownItem?.name ?? t("player.playingTitle");
     const preference = playbackPreferences[playbackPreferenceKey(itemId, knownItem?.seriesId)];
     const source = mediaSourceForPlayback(sources, mediaSourceId ?? preference?.mediaSourceId ?? undefined);
     const preferredAudioIndex = audioStreamIndex ?? preferredStreamIndex(source?.audioStreams ?? [], preference?.audioStreamIndex, preference?.audioLanguage);
@@ -797,7 +804,7 @@ function App() {
     setTestedLogin(null);
     setEditingServerId("");
     setForm(emptyForm);
-    const result = await run("启动 mpv", () =>
+    const result = await run(t("loading.startMpv"), () =>
       ipc.playItem(
         itemId,
         source?.id ?? mediaSourceId,
@@ -858,7 +865,7 @@ function App() {
     const sourceDetail = detailCache.current.get(view.itemId) ?? (detail?.item.id === view.itemId ? detail : null);
     const sources = playerSources.length ? playerSources : sourceDetail?.mediaSources ?? [];
     if (sources.length < 2) {
-      setError("当前条目没有其他版本可切换。");
+      setError(t("errors.noOtherVersion"));
       return;
     }
 
@@ -873,7 +880,7 @@ function App() {
     setPlayerTransparent(false);
     void ipc.controlPlayback(view.playSessionId, "stop").catch(() => {});
     const subtitleSelection = resolveSubtitleSelection(nextSource, undefined, resolvedSettings.subtitleMode);
-    const result = await run("切换版本", () => ipc.playItem(
+    const result = await run(t("loading.switchSource"), () => ipc.playItem(
       view.itemId,
       nextSource.id,
       undefined,
@@ -978,7 +985,7 @@ function App() {
         return result.name;
       }
     } catch {
-      // 静默失败，不影响用户继续操作
+      // Keep manual server entry usable if name probing fails.
     }
     return "";
   }
@@ -991,7 +998,6 @@ function App() {
     openView({
       name: "library",
       id: "",
-      title: "收藏",
       filters: { favorite: true },
     });
   }, [openView]);
@@ -1121,7 +1127,7 @@ function App() {
         {showContent && view.name === "library" && library?.library.id === view.id && (
           <LibraryView
             payload={library}
-            title={view.title}
+            title={view.filters?.favorite && !view.id ? t("home.favorites") : view.title}
             loadingMore={libraryLoadingMore}
             onBack={goBack}
             onOpenItem={openDetail}

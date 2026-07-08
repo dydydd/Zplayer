@@ -1,5 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ipc } from "./ipc";
+import i18n from "./i18n";
 import type { ItemDetailPayload, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
 import { bg, episodeLabel, runtimeLabel } from "./media";
 import { formatTime, mediaVersionFacts } from "./viewLogic";
@@ -49,6 +51,7 @@ export function DetailView({
   onOpenGenre: (genre: string) => void;
   onOpenPerson: (personId: string, name: string) => void;
 }) {
+  const { t } = useTranslation();
   const item = payload.item;
   const backVisible = useFloatingBackVisible(item.id);
   const entryEpisode = payload.episodes.find((episode) => episode.id === entryItemId);
@@ -177,7 +180,7 @@ export function DetailView({
 
   return (
     <div className="detail-page">
-      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label="返回">
+      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label={t("common.back")}>
         <SvgIcon name="back" />
       </button>
       <section className="hero" style={bg(item.backdropUrl ?? item.primaryImageUrl)}>
@@ -187,12 +190,12 @@ export function DetailView({
             {item.year && <span>{item.year}</span>}
             {runtime && <span>{runtime}</span>}
             {item.officialRating && <span>{item.officialRating}</span>}
-            {item.communityRating && <span>评分 {item.communityRating.toFixed(1)}</span>}
+            {item.communityRating && <span>{t("common.score", { value: item.communityRating.toFixed(1) })}</span>}
             {item.genres.slice(0, 3).map((genre) => (
               <button key={genre} className="chip-button" onClick={() => onOpenGenre(genre)}>{genre}</button>
             ))}
           </div>
-          <p>{item.overview ?? "暂无简介"}</p>
+          <p>{item.overview ?? t("detail.noOverview")}</p>
           {item.playedPercentage ? (
             <div className="detail-progress">
               <span style={{ width: `${Math.min(Math.max(item.playedPercentage, 0), 100)}%` }} />
@@ -201,22 +204,22 @@ export function DetailView({
           <div className="hero-actions">
             <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
               <SvgIcon name="play" />
-              <span>播放</span>
+              <span>{t("detail.play")}</span>
             </button>
-            <button className="mark-round" onClick={() => void mark("mark_favorite", !item.favorite)} title={item.favorite ? "已收藏" : "收藏"}>
+            <button className="mark-round" onClick={() => void mark("mark_favorite", !item.favorite)} title={item.favorite ? t("detail.favorited") : t("detail.favorite")}>
               <SvgIcon name="heart" />
             </button>
             <button className="mark-text" onClick={() => void mark("mark_played", !item.played)}>
               <SvgIcon name="check" />
-              <span>{item.played ? "已看" : "标记已看"}</span>
+              <span>{item.played ? t("detail.watched") : t("detail.markWatched")}</span>
             </button>
           </div>
           {selectedSource && (
             <div className="hero-option-row">
-              <button onClick={() => setDetailPicker("source")}><span>版本</span><strong>{selectedSource.name || `资源 ${sourceIndex + 1}`}</strong></button>
-              <button onClick={() => setDetailPicker("quality")}><span>画质</span><strong>{qualityLabel(selectedSource)}</strong></button>
-              <button onClick={() => setDetailPicker("audio")}><span>音轨</span><strong>{streamLabel(selectedAudio) ?? "默认"}</strong></button>
-              <button onClick={() => setDetailPicker("subtitle")}><span>字幕</span><strong>{subtitleStreamIndex === -1 ? "无" : streamLabel(selectedSubtitle) ?? "无"}</strong></button>
+              <button onClick={() => setDetailPicker("source")}><span>{t("detail.version")}</span><strong>{selectedSource.name || t("detail.sourceN", { index: sourceIndex + 1 })}</strong></button>
+              <button onClick={() => setDetailPicker("quality")}><span>{t("detail.quality")}</span><strong>{qualityLabel(selectedSource)}</strong></button>
+              <button onClick={() => setDetailPicker("audio")}><span>{t("detail.audio")}</span><strong>{streamLabel(selectedAudio) ?? t("common.default")}</strong></button>
+              <button onClick={() => setDetailPicker("subtitle")}><span>{t("detail.subtitle")}</span><strong>{subtitleStreamIndex === -1 ? t("detail.noSubtitle") : streamLabel(selectedSubtitle) ?? t("detail.noSubtitle")}</strong></button>
               {selectedFacts.length > 0 && <small>{selectedFacts.slice(0, 5).join(" / ")}</small>}
             </div>
           )}
@@ -228,7 +231,7 @@ export function DetailView({
                 {payload.seasons.length > 1 ? (
                   <div className={`season-switcher ${seasonPickerOpen ? "open" : ""}`} onMouseEnter={keepSeasonPickerOpen} onMouseLeave={closeSeasonPickerSoon}>
                     <button className={`season-toggle ${seasonChanged ? "changed" : ""}`} onAnimationEnd={() => setSeasonChanged(false)} onClick={() => setSeasonPickerOpen((open) => !open)}>
-                      <span>{currentSeason?.name ?? "季度"}</span>
+                      <span>{currentSeason?.name ?? t("detail.season")}</span>
                       <SvgIcon name="next" />
                     </button>
                     {seasonPickerOpen && (
@@ -250,13 +253,13 @@ export function DetailView({
                     )}
                   </div>
                 ) : (
-                  <h2>选集</h2>
+                  <h2>{t("detail.episodes")}</h2>
                 )}
-                <span className="episode-count">共 {episodes.length} 集</span>
+                <span className="episode-count">{t("common.episodesCount", { count: episodes.length })}</span>
               </div>
               <div className="episode-tools">
                 <div className="episode-jump-wrap" onMouseEnter={keepJumpPickerOpen} onMouseLeave={closeJumpPickerSoon}>
-                  <button className="episode-tool-button active" onClick={() => setJumpPickerOpen((open) => !open)}>跳转</button>
+                  <button className="episode-tool-button active" onClick={() => setJumpPickerOpen((open) => !open)}>{t("detail.jump")}</button>
                   {jumpPickerOpen && (
                     <div className="episode-jump-popover">
                       <input
@@ -270,7 +273,7 @@ export function DetailView({
                         }}
                         placeholder={`1-${episodes.length}`}
                       />
-                      <button onClick={jumpToEpisode}>跳转</button>
+                      <button onClick={jumpToEpisode}>{t("detail.jump")}</button>
                     </div>
                   )}
                 </div>
@@ -298,7 +301,7 @@ export function DetailView({
       {detailPicker && selectedSource && (
         <div className="modal-backdrop">
           <div className="source-modal">
-            <button className="close" onClick={() => setDetailPicker(null)} title="关闭"><SvgIcon name="close" /></button>
+            <button className="close" onClick={() => setDetailPicker(null)} title={t("common.close")}><SvgIcon name="close" /></button>
             <h2>{pickerTitle(detailPicker)}</h2>
             <div className="source-list">
               {detailPicker === "source" && currentMediaSources.map((source, index) => (
@@ -308,15 +311,15 @@ export function DetailView({
                   setSubtitleStreamIndex(undefined);
                   setDetailPicker(null);
                 }}>
-                  <strong>{source.name || `资源 ${index + 1}`}</strong>
-                  <span>{mediaVersionFacts(source).join(" / ") || "暂无资源信息"}</span>
+                  <strong>{source.name || t("detail.sourceN", { index: index + 1 })}</strong>
+                  <span>{mediaVersionFacts(source).join(" / ") || t("detail.noSourceInfo")}</span>
                   {source.path && <small>{source.path}</small>}
                 </button>
               ))}
               {detailPicker === "quality" && (
                 <button className="active" onClick={() => setDetailPicker(null)}>
                   <strong>{qualityLabel(selectedSource)}</strong>
-                  <span>{qualityFacts(selectedSource).join(" / ") || "原画"}</span>
+                  <span>{qualityFacts(selectedSource).join(" / ") || t("detail.originalQuality")}</span>
                 </button>
               )}
               {detailPicker === "audio" && selectedSource.audioStreams.map((stream, index) => (
@@ -324,8 +327,8 @@ export function DetailView({
                   setAudioStreamIndex(stream.index ?? index + 1);
                   setDetailPicker(null);
                 }}>
-                  <strong>{streamLabel(stream) ?? `音轨 ${index + 1}`}</strong>
-                  <span>{streamFacts(stream).join(" / ") || "默认音轨"}</span>
+                  <strong>{streamLabel(stream) ?? t("detail.audioTrackN", { index: index + 1 })}</strong>
+                  <span>{streamFacts(stream).join(" / ") || t("detail.defaultAudio")}</span>
                 </button>
               ))}
               {detailPicker === "subtitle" && (
@@ -334,16 +337,16 @@ export function DetailView({
                     setSubtitleStreamIndex(-1);
                     setDetailPicker(null);
                   }}>
-                    <strong>无字幕</strong>
-                    <span>关闭字幕</span>
+                    <strong>{t("detail.noSubtitleTitle")}</strong>
+                    <span>{t("detail.subtitleOff")}</span>
                   </button>
                   {selectedSource.subtitleStreams.map((stream, index) => (
                     <button key={stream.index ?? index} className={stream.index === selectedSubtitle?.index && subtitleStreamIndex !== -1 ? "active" : ""} onClick={() => {
                       setSubtitleStreamIndex(stream.index ?? index + 1);
                       setDetailPicker(null);
                     }}>
-                      <strong>{streamLabel(stream) ?? `字幕 ${index + 1}`}</strong>
-                      <span>{streamFacts(stream).join(" / ") || "默认字幕"}</span>
+                      <strong>{streamLabel(stream) ?? t("detail.subtitleN", { index: index + 1 })}</strong>
+                      <span>{streamFacts(stream).join(" / ") || t("detail.defaultSubtitle")}</span>
                     </button>
                   ))}
                 </>
@@ -354,7 +357,7 @@ export function DetailView({
       )}
       {payload.people.length > 0 && (
         <section className="detail-block">
-          <h2>演职人员</h2>
+          <h2>{t("detail.cast")}</h2>
           <div className="people-row">
             {payload.people.slice(0, 3).map((person) => (
               <button
@@ -373,13 +376,13 @@ export function DetailView({
       )}
       {payload.art.length > 0 && (
         <section className="detail-block">
-          <h2>艺术图</h2>
+          <h2>{t("detail.art")}</h2>
           <div className="art-row">{payload.art.slice(0, 3).map((art) => <img key={art.url} src={art.url} alt={art.imageType} />)}</div>
         </section>
       )}
       {payload.similar.length > 0 && (
         <section className="detail-block">
-          <h2>相关推荐</h2>
+          <h2>{t("detail.similar")}</h2>
           <div className="poster-grid detail-posters">{payload.similar.slice(0, 3).map((similar) => <Poster key={similar.id} item={similar} onOpen={onOpenItem} />)}</div>
         </section>
       )}
@@ -388,11 +391,17 @@ export function DetailView({
 }
 
 function pickerTitle(picker: DetailPicker) {
-  return picker === "source" ? "选择版本" : picker === "quality" ? "画质信息" : picker === "audio" ? "切换音轨" : "切换字幕";
+  return picker === "source"
+    ? i18n.t("detail.sourceTitle")
+    : picker === "quality"
+      ? i18n.t("detail.qualityTitle")
+      : picker === "audio"
+        ? i18n.t("detail.audioTitle")
+        : i18n.t("detail.subtitleTitle");
 }
 
 function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
-  return [source.resolution, source.videoRange, source.bitDepth ? `${source.bitDepth}bit` : ""].filter(Boolean).join(" ") || source.videoDisplayTitle || "原画";
+  return [source.resolution, source.videoRange, source.bitDepth ? `${source.bitDepth}bit` : ""].filter(Boolean).join(" ") || source.videoDisplayTitle || i18n.t("detail.originalQuality");
 }
 
 function qualityFacts(source: ItemDetailPayload["mediaSources"][number]) {
@@ -416,9 +425,9 @@ function streamFacts(stream: StreamInfo) {
     stream.language,
     stream.codec,
     stream.channelLayout,
-    stream.channels ? `${stream.channels} 声道` : "",
-    stream.isDefault ? "默认" : "",
-    stream.isExternal ? "外挂" : "",
+    stream.channels ? i18n.t("detail.channels", { count: stream.channels }) : "",
+    stream.isDefault ? i18n.t("common.default") : "",
+    stream.isExternal ? i18n.t("detail.external") : "",
   ].filter(Boolean) as string[];
 }
 
@@ -465,6 +474,7 @@ export function PlayerView({
   onSwitchSource: (sourceId?: string) => Promise<void>;
   onPreferenceChange: (audioIndex?: number, subtitleIndex?: number) => void;
 }) {
+  const { t } = useTranslation();
   const time = state?.timePos ?? 0;
   const duration = state?.duration ?? 0;
   const percent = duration > 0 ? Math.min(Math.max((time / duration) * 100, 0), 100) : 0;
@@ -571,21 +581,21 @@ export function PlayerView({
     <div className={`player-page ${ready ? "ready" : ""} ${visible || menu ? "" : "controls-hidden"}`} onMouseMove={showControls} onPointerDown={showControls}>
       <div className="player-drag-region" data-tauri-drag-region />
       <div className="player-top">
-        <button className="player-round player-back" onClick={onExit} aria-label="返回"><SvgIcon name="back" /></button>
+        <button className="player-round player-back" onClick={onExit} aria-label={t("common.back")}><SvgIcon name="back" /></button>
         <div className="player-top-spacer" data-tauri-drag-region />
         <div className="player-window-actions">
-          <button className="icon-btn" onClick={onMinimize} title="最小化"><SvgIcon name="min" /></button>
-          <button className="icon-btn" onClick={onToggleMaximize} title="最大化"><SvgIcon name="max" /></button>
-          <button className="icon-btn" onClick={onClose} title="关闭"><SvgIcon name="close" /></button>
+          <button className="icon-btn" onClick={onMinimize} title={t("topbar.minimize")}><SvgIcon name="min" /></button>
+          <button className="icon-btn" onClick={onToggleMaximize} title={t("topbar.maximize")}><SvgIcon name="max" /></button>
+          <button className="icon-btn" onClick={onClose} title={t("common.close")}><SvgIcon name="close" /></button>
         </div>
       </div>
       <div className="player-controls">
         <div className="player-heading">
           <div>
             <strong>{title}</strong>
-            <span>{state ? (state.paused ? "已暂停" : "正在播放") : "连接播放器..."}</span>
+            <span>{state ? (state.paused ? t("player.paused") : t("player.playing")) : t("player.connectingPlayer")}</span>
           </div>
-          <span>{duration ? `${formatTime(time)} / ${formatTime(duration)}` : "正在连接进度"}</span>
+          <span>{duration ? `${formatTime(time)} / ${formatTime(duration)}` : t("player.connectingProgress")}</span>
         </div>
         <div className="player-progress">
           <button
@@ -596,39 +606,39 @@ export function PlayerView({
               const ratio = (event.clientX - rect.left) / rect.width;
               void onCommand(`seek_absolute:${Math.max(0, Math.min(duration, duration * ratio))}`);
             }}
-            aria-label="跳转播放进度"
+            aria-label={t("player.seekProgress")}
           >
             <i style={{ width: `${percent}%` }} />
           </button>
         </div>
         <div className="player-main-actions">
-          <button className="player-round caption-toggle" onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")} aria-label="字幕"><SvgIcon name="captions" /></button>
-          {canPlayPrevious && <button className="player-round" onClick={() => void onPlayPrevious()} aria-label="上一集"><SvgIcon name="back" /></button>}
-          <button className="player-round seek-back" onClick={() => void onCommand("seek_back")} aria-label={`后退 ${seekBackSeconds} 秒`} title={`后退 ${seekBackSeconds} 秒`}><SvgIcon name="back" /></button>
-          <button className="player-round pause-toggle" onClick={() => void onCommand("toggle_pause")} aria-label="暂停或继续"><SvgIcon name={state?.paused ? "play" : "pause"} /></button>
-          <button className="player-round seek-forward" onClick={() => void onCommand("seek_forward")} aria-label={`前进 ${seekForwardSeconds} 秒`} title={`前进 ${seekForwardSeconds} 秒`}><SvgIcon name="next" /></button>
-          {canPlayNext && <button className="player-round" onClick={() => void onPlayNext()} aria-label="下一集"><SvgIcon name="next" /></button>}
-          <button className="player-round more-toggle" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? "取消静音" : "静音"}><SvgIcon name="volume" /></button>
-          <button className="player-round fullscreen-toggle" onClick={onToggleFullscreen} aria-label="全屏"><SvgIcon name="fullscreen" /></button>
+          <button className="player-round caption-toggle" onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")} aria-label={t("player.captions")}><SvgIcon name="captions" /></button>
+          {canPlayPrevious && <button className="player-round" onClick={() => void onPlayPrevious()} aria-label={t("player.previousEpisode")}><SvgIcon name="back" /></button>}
+          <button className="player-round seek-back" onClick={() => void onCommand("seek_back")} aria-label={t("player.seekBack", { seconds: seekBackSeconds })} title={t("player.seekBack", { seconds: seekBackSeconds })}><SvgIcon name="back" /></button>
+          <button className="player-round pause-toggle" onClick={() => void onCommand("toggle_pause")} aria-label={t("player.pauseResume")}><SvgIcon name={state?.paused ? "play" : "pause"} /></button>
+          <button className="player-round seek-forward" onClick={() => void onCommand("seek_forward")} aria-label={t("player.seekForward", { seconds: seekForwardSeconds })} title={t("player.seekForward", { seconds: seekForwardSeconds })}><SvgIcon name="next" /></button>
+          {canPlayNext && <button className="player-round" onClick={() => void onPlayNext()} aria-label={t("player.nextEpisode")}><SvgIcon name="next" /></button>}
+          <button className="player-round more-toggle" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? t("player.unmute") : t("player.mute")}><SvgIcon name="volume" /></button>
+          <button className="player-round fullscreen-toggle" onClick={onToggleFullscreen} aria-label={t("player.fullscreen")}><SvgIcon name="fullscreen" /></button>
         </div>
         <div className="player-option-grid">
-          <button className={menu === "audio" ? "active" : ""} onClick={() => setMenu(menu === "audio" ? null : "audio")}><span>音轨</span><strong>{streamLabel(selectedAudio) ?? "选择音轨"}</strong></button>
-          <button className={menu === "subtitle" ? "active" : ""} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")}><span>字幕</span><strong>{subtitleIndex === -1 ? "无字幕" : streamLabel(selectedSubtitle) ?? "选择字幕"}</strong></button>
-          <button className={menu === "source" ? "active" : ""} onClick={() => setMenu(menu === "source" ? null : "source")}><span>版本 / 画质</span><strong>{currentSource ? qualityLabel(currentSource) : "选择版本"}</strong></button>
+          <button className={menu === "audio" ? "active" : ""} onClick={() => setMenu(menu === "audio" ? null : "audio")}><span>{t("player.audio")}</span><strong>{streamLabel(selectedAudio) ?? t("player.selectAudio")}</strong></button>
+          <button className={menu === "subtitle" ? "active" : ""} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")}><span>{t("player.subtitle")}</span><strong>{subtitleIndex === -1 ? t("detail.noSubtitleTitle") : streamLabel(selectedSubtitle) ?? t("player.selectSubtitle")}</strong></button>
+          <button className={menu === "source" ? "active" : ""} onClick={() => setMenu(menu === "source" ? null : "source")}><span>{t("player.sourceQuality")}</span><strong>{currentSource ? qualityLabel(currentSource) : t("player.selectSource")}</strong></button>
           <div className="player-speed-control">
-            <button onClick={() => void onCommand(`speed_set:${Math.max(0.5, speed - 0.1)}`)}><span>速度</span><strong>-</strong></button>
-            <button onClick={() => void onCommand("speed_set:1")}><span>{speed.toFixed(2)}x</span><strong>重置</strong></button>
-            <button onClick={() => void onCommand(`speed_set:${Math.min(2, speed + 0.1)}`)}><span>速度</span><strong>+</strong></button>
+            <button onClick={() => void onCommand(`speed_set:${Math.max(0.5, speed - 0.1)}`)}><span>{t("player.speed")}</span><strong>-</strong></button>
+            <button onClick={() => void onCommand("speed_set:1")}><span>{speed.toFixed(2)}x</span><strong>{t("player.reset")}</strong></button>
+            <button onClick={() => void onCommand(`speed_set:${Math.min(2, speed + 0.1)}`)}><span>{t("player.speed")}</span><strong>+</strong></button>
           </div>
           <div className="player-volume-control">
-            <button onClick={() => void onCommand("toggle_mute")}><span>声音</span><strong>{state?.muted ? "已静音" : `${volume}%`}</strong></button>
+            <button onClick={() => void onCommand("toggle_mute")}><span>{t("player.volume")}</span><strong>{state?.muted ? t("player.muted") : `${volume}%`}</strong></button>
             <input
               type="range"
               min="0"
               max="100"
               value={state?.muted ? 0 : volume}
               onChange={(event) => void onCommand(`volume_set:${Number(event.currentTarget.value)}`)}
-              aria-label="音量"
+              aria-label={t("player.volumeLabel")}
             />
           </div>
           <div className="player-delay-control">
@@ -636,7 +646,7 @@ export function PlayerView({
               const next = Number((subtitleDelay - 0.25).toFixed(2));
               setSubtitleDelay(next);
               void onCommand(`subtitle_delay_set:${next}`);
-            }}><span>字幕延迟</span><strong>-0.25</strong></button>
+            }}><span>{t("player.subtitleDelay")}</span><strong>-0.25</strong></button>
             <button onClick={() => {
               const next = Number((subtitleDelay + 0.25).toFixed(2));
               setSubtitleDelay(next);
@@ -646,30 +656,30 @@ export function PlayerView({
               const next = Number((audioDelay + 0.25).toFixed(2));
               setAudioDelay(next);
               void onCommand(`audio_delay_set:${next}`);
-            }}><span>音频延迟</span><strong>{audioDelay.toFixed(2)}s</strong></button>
+            }}><span>{t("player.audioDelay")}</span><strong>{audioDelay.toFixed(2)}s</strong></button>
           </div>
           <form className="external-subtitle-form" onSubmit={(event) => {
             event.preventDefault();
             const target = externalSubtitle.trim();
             if (target) void onCommand(`external_subtitle:${target}`);
           }}>
-            <input value={externalSubtitle} onChange={(event) => setExternalSubtitle(event.currentTarget.value)} aria-label="字幕路径或 URL" />
-            <button>加载字幕</button>
+            <input value={externalSubtitle} onChange={(event) => setExternalSubtitle(event.currentTarget.value)} aria-label={t("player.subtitlePath")} />
+            <button>{t("player.loadSubtitle")}</button>
           </form>
         </div>
         {menu && (
           <div className="player-select-menu" onMouseEnter={() => window.clearTimeout(hideTimer.current)}>
-            {menu === "source" && !sources.length && <button><strong>暂无版本</strong><span>当前播放项没有更多版本</span></button>}
+            {menu === "source" && !sources.length && <button><strong>{t("player.noSources")}</strong><span>{t("player.noSourcesNote")}</span></button>}
             {menu === "source" && sources.map((source) => (
               <button key={source.id} className={source.id === currentSourceId ? "active" : ""} onClick={() => {
                 setMenu(null);
                 void onSwitchSource(source.id);
               }}>
                 <strong>{source.name || qualityLabel(source)}</strong>
-                <span>{mediaVersionFacts(source).join(" / ") || "默认版本"}</span>
+                <span>{mediaVersionFacts(source).join(" / ") || t("player.defaultSource")}</span>
               </button>
             ))}
-            {menu === "audio" && !(currentSource?.audioStreams.length) && <button><strong>暂无音轨</strong><span>播放器未返回可选音轨</span></button>}
+            {menu === "audio" && !(currentSource?.audioStreams.length) && <button><strong>{t("player.noAudio")}</strong><span>{t("player.noAudioNote")}</span></button>}
             {menu === "audio" && (currentSource?.audioStreams ?? []).map((stream, index) => (
               <button key={stream.index ?? index} className={stream.index === selectedAudio?.index ? "active" : ""} onClick={() => {
                 const nextIndex = stream.index ?? index + 1;
@@ -678,8 +688,8 @@ export function PlayerView({
                 void onCommand(`audio_set:${nextIndex}`);
                 onPreferenceChange(nextIndex, subtitleIndex);
               }}>
-                <strong>{streamLabel(stream) ?? `音轨 ${index + 1}`}</strong>
-                <span>{streamFacts(stream).join(" / ") || "默认音轨"}</span>
+                <strong>{streamLabel(stream) ?? t("detail.audioTrackN", { index: index + 1 })}</strong>
+                <span>{streamFacts(stream).join(" / ") || t("detail.defaultAudio")}</span>
               </button>
             ))}
             {menu === "subtitle" && (
@@ -689,7 +699,7 @@ export function PlayerView({
                   setMenu(null);
                   void onCommand("subtitle_set:-1");
                   onPreferenceChange(audioIndex, -1);
-                }}><strong>无字幕</strong><span>关闭字幕</span></button>
+                }}><strong>{t("detail.noSubtitleTitle")}</strong><span>{t("detail.subtitleOff")}</span></button>
                 {(currentSource?.subtitleStreams ?? []).map((stream, index) => (
                   <button key={stream.index ?? index} className={stream.index === selectedSubtitle?.index && subtitleIndex !== -1 ? "active" : ""} onClick={() => {
                     const nextIndex = stream.index ?? index + 1;
@@ -698,8 +708,8 @@ export function PlayerView({
                     void onCommand(`subtitle_set:${index + 1}`);
                     onPreferenceChange(audioIndex, nextIndex);
                   }}>
-                    <strong>{streamLabel(stream) ?? `字幕 ${index + 1}`}</strong>
-                    <span>{streamFacts(stream).join(" / ") || "默认字幕"}</span>
+                    <strong>{streamLabel(stream) ?? t("detail.subtitleN", { index: index + 1 })}</strong>
+                    <span>{streamFacts(stream).join(" / ") || t("detail.defaultSubtitle")}</span>
                   </button>
                 ))}
               </>

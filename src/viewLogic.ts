@@ -1,4 +1,5 @@
 ﻿import type { ItemDetailPayload } from "./types";
+import i18n from "./i18n";
 
 export function formatTime(seconds: number) {
   const value = Math.max(0, Math.floor(seconds || 0));
@@ -16,12 +17,12 @@ export function mediaVersionFacts(source?: ItemDetailPayload["mediaSources"][num
     source.container?.toUpperCase(),
     source.resolution,
     source.videoCodec,
-    source.frameRate ? `${source.frameRate.toFixed(2)} fps` : "",
+    source.frameRate ? i18n.t("media.fps", { value: source.frameRate.toFixed(2) }) : "",
     source.audioCodec,
-    source.audioChannels ? `${source.audioChannels} 声道` : "",
-    source.bitrate ? `${Math.round(source.bitrate / 1000000)} Mbps` : "",
+    source.audioChannels ? i18n.t("detail.channels", { count: source.audioChannels }) : "",
+    source.bitrate ? i18n.t("media.bitrate", { value: Math.round(source.bitrate / 1000000) }) : "",
     source.size ? formatBytes(source.size) : "",
-    source.subtitleCount ? `${source.subtitleCount} 字幕` : "",
+    source.subtitleCount ? i18n.t("media.subtitles", { count: source.subtitleCount }) : "",
     source.protocol,
   ].filter(Boolean) as string[];
 }

@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { MediaItem } from "./types";
 import { itemMeta } from "./media";
 
@@ -42,7 +43,8 @@ export function useFloatingBackVisible(resetKey: string) {
 }
 
 export function LoadingPage() {
-  return <div className="loading-page" aria-label="加载中" />;
+  const { t } = useTranslation();
+  return <div className="loading-page" aria-label={t("parts.loading")} />;
 }
 
 export function EmptyState({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
@@ -69,6 +71,7 @@ export function ShelfHeader({
   onScrollRight?: () => void;
   showControls?: boolean;
 }) {
+  const { t } = useTranslation();
   const titleContent = (
     <>
       {title}
@@ -87,8 +90,8 @@ export function ShelfHeader({
       )}
       {showControls && (
         <div className="shelf-actions">
-          <button className="shelf-arrow left" onClick={onScrollLeft} aria-label="向左滚动" />
-          <button className="shelf-arrow right" onClick={onScrollRight} aria-label="向右滚动" />
+          <button className="shelf-arrow left" onClick={onScrollLeft} aria-label={t("parts.scrollLeft")} />
+          <button className="shelf-arrow right" onClick={onScrollRight} aria-label={t("parts.scrollRight")} />
         </div>
       )}
     </div>
@@ -112,6 +115,7 @@ export function ScrollableStage({
   scrollKey?: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -161,11 +165,11 @@ export function ScrollableStage({
 
   return (
     <div className={`row-stage ${className}`}>
-      {floatingControls && canScrollLeft && <button className="row-float-arrow left" onClick={() => scrollByPage(-1)} aria-label="向左滚动" />}
+      {floatingControls && canScrollLeft && <button className="row-float-arrow left" onClick={() => scrollByPage(-1)} aria-label={t("parts.scrollLeft")} />}
       <div className={rowClassName} ref={rowRef} onMouseEnter={updateScrollState}>
         {children}
       </div>
-      {floatingControls && canScrollRight && <button className="row-float-arrow right" onClick={() => scrollByPage(1)} aria-label="向右滚动" />}
+      {floatingControls && canScrollRight && <button className="row-float-arrow right" onClick={() => scrollByPage(1)} aria-label={t("parts.scrollRight")} />}
     </div>
   );
 }
@@ -183,6 +187,7 @@ export const Poster = memo(function Poster({
   onToggleFavorite?: (item: MediaItem) => void;
   onTogglePlayed?: (item: MediaItem) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <article className="poster">
       <button className="poster-main" onClick={() => onOpen(item.id)}>
@@ -195,8 +200,8 @@ export const Poster = memo(function Poster({
       </button>
       {(onToggleFavorite || onTogglePlayed) && (
         <div className="poster-actions">
-          {onToggleFavorite && <button type="button" onClick={() => onToggleFavorite(item)}>{item.favorite ? "已收藏" : "收藏"}</button>}
-          {onTogglePlayed && <button type="button" onClick={() => onTogglePlayed(item)}>{item.played ? "已看" : "标记"}</button>}
+          {onToggleFavorite && <button type="button" onClick={() => onToggleFavorite(item)}>{item.favorite ? t("detail.favorited") : t("detail.favorite")}</button>}
+          {onTogglePlayed && <button type="button" onClick={() => onTogglePlayed(item)}>{item.played ? t("detail.watched") : t("parts.posterMarked")}</button>}
         </div>
       )}
     </article>

@@ -45,6 +45,7 @@ mod tests {
         assert_eq!(settings.theme, "dark");
         assert!(!settings.diagnostics_enabled);
         assert!(settings.autoplay_next_episode);
+        assert_eq!(settings.language, "auto");
     }
 
     #[test]
@@ -60,6 +61,7 @@ mod tests {
             theme: Some("midnight".to_string()),
             diagnostics_enabled: Some(true),
             autoplay_next_episode: Some(false),
+            language: Some("fr-FR".to_string()),
         });
 
         assert_eq!(settings.mpv_path.as_deref(), Some("C:/mpv/mpv.exe"));
@@ -72,5 +74,6 @@ mod tests {
         assert_eq!(settings.theme, "midnight");
         assert!(settings.diagnostics_enabled);
         assert!(!settings.autoplay_next_episode);
+        assert_eq!(settings.language, "auto");
     }
 }

@@ -105,6 +105,8 @@ pub(crate) struct AppSettings {
     pub(crate) diagnostics_enabled: bool,
     #[serde(default = "default_true")]
     pub(crate) autoplay_next_episode: bool,
+    #[serde(default = "default_language")]
+    pub(crate) language: String,
 }
 
 impl Default for AppSettings {
@@ -120,6 +122,7 @@ impl Default for AppSettings {
             theme: default_theme(),
             diagnostics_enabled: false,
             autoplay_next_episode: default_true(),
+            language: default_language(),
         }
     }
 }
@@ -137,6 +140,7 @@ pub(crate) struct SaveSettingsInput {
     pub(crate) theme: Option<String>,
     pub(crate) diagnostics_enabled: Option<bool>,
     pub(crate) autoplay_next_episode: Option<bool>,
+    pub(crate) language: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -179,6 +183,10 @@ fn default_theme() -> String {
     "dark".to_string()
 }
 
+fn default_language() -> String {
+    "auto".to_string()
+}
+
 pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
     AppSettings {
         mpv_path: input
@@ -212,5 +220,10 @@ pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
         },
         diagnostics_enabled: input.diagnostics_enabled.unwrap_or(false),
         autoplay_next_episode: input.autoplay_next_episode.unwrap_or_else(default_true),
+        language: match input.language.as_deref() {
+            Some("zh-CN") => "zh-CN".to_string(),
+            Some("en-US") => "en-US".to_string(),
+            _ => default_language(),
+        },
     }
 }

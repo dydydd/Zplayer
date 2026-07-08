@@ -1,33 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { LibraryFilters, LibraryItemType, LibraryPayload, LibraryPlayedFilter, LibrarySortBy, LibrarySortOrder, MediaItem, PosterDensity } from "./types";
 import { EmptyState, Poster, useFloatingBackVisible } from "./viewParts";
-
-const typeOptions: { value: LibraryItemType; label: string }[] = [
-  { value: "", label: "全部" },
-  { value: "Movie", label: "电影" },
-  { value: "Series", label: "剧集" },
-  { value: "Episode", label: "单集" },
-  { value: "Video", label: "视频" },
-];
-const sortOptions: { value: LibrarySortBy; label: string }[] = [
-  { value: "DateCreated", label: "最近添加" },
-  { value: "SortName", label: "名称" },
-  { value: "PremiereDate", label: "首播日期" },
-  { value: "CommunityRating", label: "评分" },
-];
-const orderOptions: { value: LibrarySortOrder; label: string }[] = [
-  { value: "Descending", label: "降序" },
-  { value: "Ascending", label: "升序" },
-];
-const playedOptions: { value: LibraryPlayedFilter; label: string }[] = [
-  { value: "", label: "全部" },
-  { value: "unplayed", label: "未看" },
-  { value: "played", label: "已看" },
-];
-const favoriteOptions = [
-  { value: "", label: "全部" },
-  { value: "favorite", label: "收藏" },
-] as const;
 
 export function LibraryView({
   payload,
@@ -60,8 +34,35 @@ export function LibraryView({
   onToggleFavorite: (item: MediaItem) => void;
   onTogglePlayed: (item: MediaItem) => void;
 }) {
+  const { t } = useTranslation();
   const backVisible = useFloatingBackVisible(payload.library.id);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const typeOptions: { value: LibraryItemType; label: string }[] = [
+    { value: "", label: t("library.all") },
+    { value: "Movie", label: t("library.movie") },
+    { value: "Series", label: t("library.series") },
+    { value: "Episode", label: t("library.episode") },
+    { value: "Video", label: t("library.video") },
+  ];
+  const sortOptions: { value: LibrarySortBy; label: string }[] = [
+    { value: "DateCreated", label: t("library.recentlyAdded") },
+    { value: "SortName", label: t("library.name") },
+    { value: "PremiereDate", label: t("library.premiereDate") },
+    { value: "CommunityRating", label: t("library.rating") },
+  ];
+  const orderOptions: { value: LibrarySortOrder; label: string }[] = [
+    { value: "Descending", label: t("library.descending") },
+    { value: "Ascending", label: t("library.ascending") },
+  ];
+  const playedOptions: { value: LibraryPlayedFilter; label: string }[] = [
+    { value: "", label: t("library.all") },
+    { value: "unplayed", label: t("library.unplayed") },
+    { value: "played", label: t("library.played") },
+  ];
+  const favoriteOptions: readonly { value: "" | "favorite"; label: string }[] = [
+    { value: "", label: t("library.all") },
+    { value: "favorite", label: t("library.favorite") },
+  ];
 
   useEffect(() => {
     if (!payload.hasMore || loadingMore) return;
@@ -80,25 +81,25 @@ export function LibraryView({
 
   return (
     <div className="page library-page">
-      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label="返回" />
+      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label={t("common.back")} />
       <div className="library-heading">
         <h1>{title ?? payload.library.name}</h1>
         <div className="filters">
-          <span>{payload.totalCount} 项</span>
-          <FilterMenu label="类型" value={itemType} options={typeOptions} onChange={(value) => onOptionsChange(value, sortBy, sortOrder, filters)} />
-          <FilterMenu label="排序" value={sortBy} options={sortOptions} onChange={(value) => onOptionsChange(itemType, value, sortOrder, filters)} />
-          <FilterMenu label="方向" value={sortOrder} options={orderOptions} onChange={(value) => onOptionsChange(itemType, sortBy, value, filters)} />
-          <FilterMenu label="观看" value={filters.played ?? ""} options={playedOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, played: value })} />
-          <FilterMenu label="收藏" value={filters.favorite ? "favorite" : ""} options={favoriteOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, favorite: value === "favorite" || undefined })} />
+          <span>{t("library.itemsCount", { count: payload.totalCount })}</span>
+          <FilterMenu label={t("library.type")} value={itemType} options={typeOptions} onChange={(value) => onOptionsChange(value, sortBy, sortOrder, filters)} />
+          <FilterMenu label={t("library.sort")} value={sortBy} options={sortOptions} onChange={(value) => onOptionsChange(itemType, value, sortOrder, filters)} />
+          <FilterMenu label={t("library.direction")} value={sortOrder} options={orderOptions} onChange={(value) => onOptionsChange(itemType, sortBy, value, filters)} />
+          <FilterMenu label={t("library.watched")} value={filters.played ?? ""} options={playedOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, played: value })} />
+          <FilterMenu label={t("library.favorites")} value={filters.favorite ? "favorite" : ""} options={favoriteOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, favorite: value === "favorite" || undefined })} />
         </div>
       </div>
-      {!payload.items.length && !loadingMore && <EmptyState title="这个媒体库暂时没有可显示的项目" />}
+      {!payload.items.length && !loadingMore && <EmptyState title={t("library.empty")} />}
       <div className={`poster-grid poster-density-${posterDensity}`} ref={gridRef}>
         {payload.items.map((item) => (
           <Poster key={item.id} item={item} onOpen={onOpenItem} hideMeta onToggleFavorite={onToggleFavorite} onTogglePlayed={onTogglePlayed} />
         ))}
       </div>
-      {loadingMore && <div className="loading-more">加载中...</div>}
+      {loadingMore && <div className="loading-more">{t("library.loadingMore")}</div>}
     </div>
   );
 }
@@ -178,19 +179,20 @@ export function SearchOverlay({
   onUseRecentTerm: (term: string) => void;
   onOpen: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const trimmedQuery = query.trim();
 
   return (
     <div className="page search-page">
-      <h1>搜索</h1>
+      <h1>{t("library.search")}</h1>
       <p className="search-count">
         {!trimmedQuery
-          ? "最近搜索"
+          ? t("library.recentSearch")
           : loading
-            ? "搜索中..."
+            ? t("library.searching")
             : results.length
-              ? `找到 ${results.length} 个结果`
-              : `没有找到“${query}”`}
+              ? t("library.results", { count: results.length })
+              : t("library.noResult", { query })}
       </p>
       {!trimmedQuery && recentTerms.length > 0 && (
         <div className="search-recents">
@@ -199,8 +201,8 @@ export function SearchOverlay({
           ))}
         </div>
       )}
-      {!trimmedQuery && !recentTerms.length && <EmptyState title="还没有最近搜索" />}
-      {!loading && trimmedQuery && !results.length && <EmptyState title="换个关键词试试" />}
+      {!trimmedQuery && !recentTerms.length && <EmptyState title={t("library.noRecent")} />}
+      {!loading && trimmedQuery && !results.length && <EmptyState title={t("library.tryAnother")} />}
       <div className={`poster-grid poster-density-${posterDensity} ${loading ? "is-loading" : ""}`}>
         {results.map((item) => (
           <Poster key={item.id} item={item} onOpen={onOpen} />

@@ -1,3 +1,6 @@
+import { normalizeLanguage, type AppLanguage } from "./i18nLogic";
+export type { AppLanguage } from "./i18nLogic";
+
 export type View =
   | { name: "servers" }
   | { name: "settings" }
@@ -52,6 +55,7 @@ export type AppSettings = {
   theme?: AppTheme;
   diagnosticsEnabled?: boolean;
   autoplayNextEpisode?: boolean;
+  language?: AppLanguage;
 };
 
 export type LinuxWindowDiagnostics = {
@@ -72,6 +76,7 @@ export type ResolvedAppSettings = {
   theme: AppTheme;
   diagnosticsEnabled: boolean;
   autoplayNextEpisode: boolean;
+  language: AppLanguage;
 };
 
 export const defaultAppSettings: ResolvedAppSettings = {
@@ -85,6 +90,7 @@ export const defaultAppSettings: ResolvedAppSettings = {
   theme: "dark",
   diagnosticsEnabled: false,
   autoplayNextEpisode: true,
+  language: "auto",
 };
 
 export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedAppSettings {
@@ -101,6 +107,7 @@ export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedApp
     theme: settings.theme ?? defaultAppSettings.theme,
     diagnosticsEnabled: settings.diagnosticsEnabled ?? defaultAppSettings.diagnosticsEnabled,
     autoplayNextEpisode: settings.autoplayNextEpisode ?? defaultAppSettings.autoplayNextEpisode,
+    language: normalizeLanguage(settings.language),
   };
 }
 
