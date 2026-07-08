@@ -1,7 +1,7 @@
-import type { HomePayload, ItemDetailPayload, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem } from "./types";
+import type { HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem } from "./types";
 
-export function libraryKey(libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder) {
-  return `${libraryId}:${itemType}:${sortBy}:${sortOrder}`;
+export function libraryKey(libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters = {}) {
+  return `${libraryId}:${itemType}:${sortBy}:${sortOrder}:${JSON.stringify(filters)}`;
 }
 
 export function findKnownItem(

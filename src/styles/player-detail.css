@@ -417,13 +417,21 @@
   margin-bottom: 14px;
 }
 
-.chips span {
+.chips span,
+.chip-button {
   color: rgba(255, 255, 255, 0.88);
   font-size: 18px;
   font-weight: 900;
 }
 
-.chips span + span::before {
+.chip-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chips > * + *::before {
   margin-right: 8px;
   color: rgba(255, 255, 255, 0.48);
   content: "/";
@@ -849,7 +857,8 @@
 .people-row::-webkit-scrollbar,
 .art-row::-webkit-scrollbar { display: none; }
 
-.person-card { width: 136px; text-align: center; }
+.person-card { width: 136px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: center; }
+.person-card:not(:disabled) { cursor: pointer; }
 .person-card img,
 .person-card .image-fallback { width: 112px; height: 112px; margin: 0 auto 14px; border-radius: 50%; object-fit: cover; background: #1d1d1f; }
 .person-card strong,

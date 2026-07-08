@@ -11,6 +11,7 @@ export function HomeView({
   onAddServer,
   onOpenServers,
   onOpenSettings,
+  onOpenFavorites,
   onActivateServer,
   onOpenLibrary,
   onOpenItem,
@@ -25,6 +26,7 @@ export function HomeView({
   onAddServer: () => void;
   onOpenServers: () => void;
   onOpenSettings: () => void;
+  onOpenFavorites: () => void;
   onActivateServer: (id: string) => Promise<void>;
   onOpenLibrary: (id: string) => void;
   onOpenItem: (id: string) => void;
@@ -119,6 +121,10 @@ export function HomeView({
               setServerMenuOpen(false);
               onOpenServers();
             }}>服务器管理</button>
+            <button onClick={() => {
+              setServerMenuOpen(false);
+              onOpenFavorites();
+            }}>收藏</button>
             <button onClick={() => {
               setServerMenuOpen(false);
               onOpenSettings();
