@@ -21,19 +21,32 @@ struct PlaybackStoppedEvent {
     completed: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn watch_mpv_playback(
-    app: AppHandle,
-    server: SavedServer,
-    mut child: std::process::Child,
-    progress_path: std::path::PathBuf,
-    item_id: String,
-    media_source_id: Option<String>,
-    play_session_id: String,
-    audio_stream_index: Option<i32>,
-    subtitle_stream_index: Option<i32>,
-    start_position_ticks: Option<i64>,
-) {
+pub(crate) struct WatchMpvPlaybackInput {
+    pub(crate) app: AppHandle,
+    pub(crate) server: SavedServer,
+    pub(crate) child: std::process::Child,
+    pub(crate) progress_path: std::path::PathBuf,
+    pub(crate) item_id: String,
+    pub(crate) media_source_id: Option<String>,
+    pub(crate) play_session_id: String,
+    pub(crate) audio_stream_index: Option<i32>,
+    pub(crate) subtitle_stream_index: Option<i32>,
+    pub(crate) start_position_ticks: Option<i64>,
+}
+
+pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
+    let WatchMpvPlaybackInput {
+        app,
+        server,
+        mut child,
+        progress_path,
+        item_id,
+        media_source_id,
+        play_session_id,
+        audio_stream_index,
+        subtitle_stream_index,
+        start_position_ticks,
+    } = input;
     let client = api::http_client(server.use_system_proxy).ok();
     let mut last_ticks = None;
     let mut report_elapsed = Duration::ZERO;

@@ -46,18 +46,30 @@ pub(crate) struct Launch {
     pub(crate) control_path: PathBuf,
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(crate) struct LaunchRequest<'a> {
+    pub(crate) item_id: &'a str,
+    pub(crate) media_source_id: Option<String>,
+    pub(crate) play_session_id: String,
+    pub(crate) stream_url: &'a str,
+    pub(crate) subtitle_track_position: Option<i32>,
+    pub(crate) subtitle_url: Option<&'a str>,
+    pub(crate) start_position_ticks: Option<i64>,
+}
+
 pub(crate) fn launch(
     app: &AppHandle,
     server: &SavedServer,
-    item_id: &str,
-    media_source_id: Option<String>,
-    play_session_id: String,
-    stream_url: &str,
-    subtitle_track_position: Option<i32>,
-    subtitle_url: Option<&str>,
-    start_position_ticks: Option<i64>,
+    request: LaunchRequest<'_>,
 ) -> Result<Launch, String> {
+    let LaunchRequest {
+        item_id,
+        media_source_id,
+        play_session_id,
+        stream_url,
+        subtitle_track_position,
+        subtitle_url,
+        start_position_ticks,
+    } = request;
     let redacted_url = redact_secret(stream_url, &server.access_token);
     let settings = store::settings(app)?;
     let mpv_path = find_mpv(app, &settings)?;

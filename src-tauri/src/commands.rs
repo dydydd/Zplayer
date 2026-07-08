@@ -347,13 +347,15 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
                 api::get_library_items(
                     &client,
                     &server,
-                    &input.library_id,
-                    start_index,
-                    limit,
-                    item_type,
-                    sort_by,
-                    sort_order,
-                    &filters,
+                    api::LibraryItemsQuery {
+                        library_id: &input.library_id,
+                        start_index,
+                        limit,
+                        item_type,
+                        sort_by,
+                        sort_order,
+                        filters: &filters,
+                    },
                 )
             });
             let library = if input.library_id.is_empty() {
@@ -385,13 +387,15 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
             api::get_library_items(
                 &client,
                 &server,
-                &input.library_id,
-                start_index,
-                limit,
-                item_type,
-                sort_by,
-                sort_order,
-                &filters,
+                api::LibraryItemsQuery {
+                    library_id: &input.library_id,
+                    start_index,
+                    limit,
+                    item_type,
+                    sort_by,
+                    sort_order,
+                    filters: &filters,
+                },
             )?,
         )
     };
@@ -587,13 +591,15 @@ fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String
     let launch = mpv::launch(
         &app,
         &server,
-        &item.id,
-        media_source_id,
-        play_session_id.clone(),
-        &playback.stream_url,
-        input.subtitle_stream_position,
-        playback.subtitle_url.as_deref(),
-        start_position_ticks,
+        mpv::LaunchRequest {
+            item_id: &item.id,
+            media_source_id,
+            play_session_id: play_session_id.clone(),
+            stream_url: &playback.stream_url,
+            subtitle_track_position: input.subtitle_stream_position,
+            subtitle_url: playback.subtitle_url.as_deref(),
+            start_position_ticks,
+        },
     )?;
     let result = launch.result;
     let watched_item_id = result.item_id.clone();
@@ -607,18 +613,18 @@ fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String
         launch.child.id(),
     );
     thread::spawn(move || {
-        crate::playback_watch::watch_mpv_playback(
+        crate::playback_watch::watch_mpv_playback(crate::playback_watch::WatchMpvPlaybackInput {
             app,
             server,
-            launch.child,
-            launch.progress_path,
-            watched_item_id,
-            watched_media_source_id,
+            child: launch.child,
+            progress_path: launch.progress_path,
+            item_id: watched_item_id,
+            media_source_id: watched_media_source_id,
             play_session_id,
-            watched_audio_stream_index,
-            watched_subtitle_stream_index,
+            audio_stream_index: watched_audio_stream_index,
+            subtitle_stream_index: watched_subtitle_stream_index,
             start_position_ticks,
-        );
+        });
     });
     Ok(result)
 }

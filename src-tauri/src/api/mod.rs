@@ -136,6 +136,16 @@ pub(crate) struct LibraryQueryFilters {
     pub(crate) collection_id: Option<String>,
 }
 
+pub(crate) struct LibraryItemsQuery<'a> {
+    pub(crate) library_id: &'a str,
+    pub(crate) start_index: usize,
+    pub(crate) limit: usize,
+    pub(crate) item_type: Option<&'a str>,
+    pub(crate) sort_by: &'a str,
+    pub(crate) sort_order: &'a str,
+    pub(crate) filters: &'a LibraryQueryFilters,
+}
+
 fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &LibraryQueryFilters) {
     let mut filter_values = Vec::new();
     if let Some(played) = filters.played {
@@ -159,26 +169,23 @@ fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &Li
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn get_library_items(
     client: &Client,
     server: &SavedServer,
-    library_id: &str,
-    start_index: usize,
-    limit: usize,
-    item_type: Option<&str>,
-    sort_by: &str,
-    sort_order: &str,
-    filters: &LibraryQueryFilters,
+    query: LibraryItemsQuery<'_>,
 ) -> Result<(Vec<MediaItem>, usize), String> {
-    let parent_id = filters.collection_id.as_deref().unwrap_or(library_id);
+    let parent_id = query
+        .filters
+        .collection_id
+        .as_deref()
+        .unwrap_or(query.library_id);
     let mut emby_params = vec![
         ("Recursive", "true".to_string()),
-        ("StartIndex", start_index.to_string()),
-        ("Limit", limit.to_string()),
+        ("StartIndex", query.start_index.to_string()),
+        ("Limit", query.limit.to_string()),
         ("EnableTotalRecordCount", "true".to_string()),
-        ("SortBy", sort_by.to_string()),
-        ("SortOrder", sort_order.to_string()),
+        ("SortBy", query.sort_by.to_string()),
+        ("SortOrder", query.sort_order.to_string()),
         ("Fields", item_fields()),
         ("EnableImages", "true".to_string()),
         ("EnableImageTypes", image_types()),
@@ -187,11 +194,11 @@ pub(crate) fn get_library_items(
     let mut jellyfin_params = vec![
         ("userId", server.user_id.clone()),
         ("recursive", "true".to_string()),
-        ("startIndex", start_index.to_string()),
-        ("limit", limit.to_string()),
+        ("startIndex", query.start_index.to_string()),
+        ("limit", query.limit.to_string()),
         ("enableTotalRecordCount", "true".to_string()),
-        ("sortBy", sort_by.to_string()),
-        ("sortOrder", sort_order.to_string()),
+        ("sortBy", query.sort_by.to_string()),
+        ("sortOrder", query.sort_order.to_string()),
         ("fields", item_fields()),
         ("enableImages", "true".to_string()),
         ("enableImageTypes", image_types()),
@@ -201,12 +208,12 @@ pub(crate) fn get_library_items(
         emby_params.push(("ParentId", parent_id.to_string()));
         jellyfin_params.push(("parentId", parent_id.to_string()));
     }
-    if let Some(item_type) = item_type.filter(|value| !value.is_empty()) {
+    if let Some(item_type) = query.item_type.filter(|value| !value.is_empty()) {
         emby_params.push(("IncludeItemTypes", item_type.to_string()));
         jellyfin_params.push(("includeItemTypes", item_type.to_string()));
     }
-    append_library_filters(&mut emby_params, filters);
-    append_library_filters(&mut jellyfin_params, filters);
+    append_library_filters(&mut emby_params, query.filters);
+    append_library_filters(&mut jellyfin_params, query.filters);
     get_items_page(client, server, "Users/{user_id}/Items", &emby_params)
         .or_else(|_| get_items_page(client, server, "Items", &jellyfin_params))
 }
