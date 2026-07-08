@@ -15,6 +15,17 @@ pub(crate) struct LibraryInput {
     pub(crate) item_type: Option<String>,
     pub(crate) sort_by: Option<String>,
     pub(crate) sort_order: Option<String>,
+    pub(crate) filters: Option<LibraryFiltersInput>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct LibraryFiltersInput {
+    pub(crate) played: Option<String>,
+    pub(crate) favorite: Option<bool>,
+    pub(crate) genre: Option<String>,
+    pub(crate) person_id: Option<String>,
+    pub(crate) collection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

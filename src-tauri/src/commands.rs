@@ -2,7 +2,7 @@ use crate::api;
 use crate::models::{
     normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
     HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryInput, LibraryLatestPayload,
-    LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary, PlayResult,
+    LibraryFiltersInput, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary, PlayResult,
     PlaybackControlInput, PlaybackStateInput, PlaybackStateResult, ReportPlaybackProgressInput,
     ReportPlaybackStartInput, ReportPlaybackStoppedInput, SaveServerInput, SaveSettingsInput,
     SavedServer, SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
@@ -277,6 +277,30 @@ fn load_recommended_movies(
     )
 }
 
+fn normalize_library_filters(input: Option<LibraryFiltersInput>) -> api::LibraryQueryFilters {
+    let input = input.unwrap_or_default();
+    api::LibraryQueryFilters {
+        played: match input.played.as_deref() {
+            Some("played") => Some(true),
+            Some("unplayed") => Some(false),
+            _ => None,
+        },
+        favorite: input.favorite,
+        genre: input
+            .genre
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        person_id: input
+            .person_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        collection_id: input
+            .collection_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn load_library(
     app: AppHandle,
@@ -295,9 +319,9 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
     let item_type = normalize_item_type(input.item_type.as_deref());
     let (sort_by, sort_order) =
         normalize_library_sort(input.sort_by.as_deref(), input.sort_order.as_deref());
+    let filters = normalize_library_filters(input.filters.clone());
     let (library, (items, total_count)) = if start_index == 0 {
         thread::scope(|scope| {
-            let libraries = scope.spawn(|| api::fetch_libraries(&client, &server));
             let items = scope.spawn(|| {
                 api::get_library_items(
                     &client,
@@ -308,14 +332,22 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
                     item_type,
                     sort_by,
                     sort_order,
+                    &filters,
                 )
             });
-            let library = libraries
-                .join()
-                .map_err(|_| "Failed to load libraries.".to_string())??
-                .into_iter()
-                .find(|library| library.id == input.library_id)
-                .ok_or_else(|| "Library not found.".to_string())?;
+            let library = if input.library_id.is_empty() {
+                MediaLibrary {
+                    id: input.library_id.clone(),
+                    name: "收藏".to_string(),
+                    collection_type: None,
+                    image_url: None,
+                }
+            } else {
+                api::fetch_libraries(&client, &server)?
+                    .into_iter()
+                    .find(|library| library.id == input.library_id)
+                    .ok_or_else(|| "Library not found.".to_string())?
+            };
             let items = items
                 .join()
                 .map_err(|_| "Failed to load library items.".to_string())??;
@@ -338,6 +370,7 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
                 item_type,
                 sort_by,
                 sort_order,
+                &filters,
             )?,
         )
     };

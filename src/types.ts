@@ -2,13 +2,21 @@ export type View =
   | { name: "servers" }
   | { name: "settings" }
   | { name: "home" }
-  | { name: "library"; id: string; itemType?: LibraryItemType; sortBy?: LibrarySortBy; sortOrder?: LibrarySortOrder }
+  | { name: "library"; id: string; title?: string; itemType?: LibraryItemType; sortBy?: LibrarySortBy; sortOrder?: LibrarySortOrder; filters?: LibraryFilters }
   | { name: "detail"; id: string }
   | { name: "player"; itemId: string; title: string; playSessionId?: string | null; mediaSourceId?: string | null; subtitleStreamIndex?: number | null };
 
 export type LibraryItemType = "" | "Movie" | "Series" | "Episode" | "Video";
 export type LibrarySortBy = "DateCreated" | "SortName" | "PremiereDate" | "CommunityRating";
 export type LibrarySortOrder = "Ascending" | "Descending";
+export type LibraryPlayedFilter = "" | "played" | "unplayed";
+export type LibraryFilters = {
+  played?: LibraryPlayedFilter;
+  favorite?: boolean;
+  genre?: string;
+  personId?: string;
+  collectionId?: string;
+};
 export type AppTheme = "dark" | "midnight";
 export type SubtitleMode = "auto" | "off";
 export type PosterDensity = "comfortable" | "compact";

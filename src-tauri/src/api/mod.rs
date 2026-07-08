@@ -127,6 +127,38 @@ pub(crate) fn get_latest_items(
         .or_else(|_| get_items(client, server, "Items/Latest", &jellyfin_params))
 }
 
+#[derive(Default, Clone)]
+pub(crate) struct LibraryQueryFilters {
+    pub(crate) played: Option<bool>,
+    pub(crate) favorite: Option<bool>,
+    pub(crate) genre: Option<String>,
+    pub(crate) person_id: Option<String>,
+    pub(crate) collection_id: Option<String>,
+}
+
+fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &LibraryQueryFilters) {
+    let mut filter_values = Vec::new();
+    if let Some(played) = filters.played {
+        filter_values.push(if played { "IsPlayed" } else { "IsUnplayed" });
+    }
+    if filters.favorite == Some(true) {
+        filter_values.push("IsFavorite");
+    }
+    if !filter_values.is_empty() {
+        let value = filter_values.join(",");
+        params.push(("Filters", value.clone()));
+        params.push(("filters", value));
+    }
+    if let Some(genre) = filters.genre.as_deref() {
+        params.push(("Genres", genre.to_string()));
+        params.push(("genres", genre.to_string()));
+    }
+    if let Some(person_id) = filters.person_id.as_deref() {
+        params.push(("PersonIds", person_id.to_string()));
+        params.push(("personIds", person_id.to_string()));
+    }
+}
+
 pub(crate) fn get_library_items(
     client: &Client,
     server: &SavedServer,
@@ -136,9 +168,10 @@ pub(crate) fn get_library_items(
     item_type: Option<&str>,
     sort_by: &str,
     sort_order: &str,
+    filters: &LibraryQueryFilters,
 ) -> Result<(Vec<MediaItem>, usize), String> {
+    let parent_id = filters.collection_id.as_deref().unwrap_or(library_id);
     let mut emby_params = vec![
-        ("ParentId", library_id.to_string()),
         ("Recursive", "true".to_string()),
         ("StartIndex", start_index.to_string()),
         ("Limit", limit.to_string()),
@@ -152,7 +185,6 @@ pub(crate) fn get_library_items(
     ];
     let mut jellyfin_params = vec![
         ("userId", server.user_id.clone()),
-        ("parentId", library_id.to_string()),
         ("recursive", "true".to_string()),
         ("startIndex", start_index.to_string()),
         ("limit", limit.to_string()),
@@ -164,10 +196,16 @@ pub(crate) fn get_library_items(
         ("enableImageTypes", image_types()),
         ("imageTypeLimit", "1".to_string()),
     ];
+    if !parent_id.is_empty() {
+        emby_params.push(("ParentId", parent_id.to_string()));
+        jellyfin_params.push(("parentId", parent_id.to_string()));
+    }
     if let Some(item_type) = item_type.filter(|value| !value.is_empty()) {
         emby_params.push(("IncludeItemTypes", item_type.to_string()));
         jellyfin_params.push(("includeItemTypes", item_type.to_string()));
     }
+    append_library_filters(&mut emby_params, filters);
+    append_library_filters(&mut jellyfin_params, filters);
     get_items_page(client, server, "Users/{user_id}/Items", &emby_params)
         .or_else(|_| get_items_page(client, server, "Items", &jellyfin_params))
 }
@@ -1084,6 +1122,26 @@ mod tests {
     #[test]
     fn rejects_url_without_scheme() {
         assert!(normalize_server_url("127.0.0.1:8096").is_err());
+    }
+
+    #[test]
+    fn library_filters_emit_server_params() {
+        let filters = LibraryQueryFilters {
+            played: Some(false),
+            favorite: Some(true),
+            genre: Some("Drama".to_string()),
+            person_id: Some("person-1".to_string()),
+            collection_id: None,
+        };
+        let mut params = Vec::new();
+        append_library_filters(&mut params, &filters);
+
+        assert!(params.contains(&("Filters", "IsUnplayed,IsFavorite".to_string())));
+        assert!(params.contains(&("filters", "IsUnplayed,IsFavorite".to_string())));
+        assert!(params.contains(&("Genres", "Drama".to_string())));
+        assert!(params.contains(&("genres", "Drama".to_string())));
+        assert!(params.contains(&("PersonIds", "person-1".to_string())));
+        assert!(params.contains(&("personIds", "person-1".to_string())));
     }
 
     #[test]
