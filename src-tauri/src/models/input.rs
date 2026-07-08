@@ -51,6 +51,18 @@ pub(crate) struct PlaybackStateInput {
     pub(crate) play_session_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SavePlaybackPreferenceInput {
+    pub(crate) item_id: String,
+    pub(crate) series_id: Option<String>,
+    pub(crate) media_source_id: Option<String>,
+    pub(crate) audio_stream_index: Option<i32>,
+    pub(crate) audio_language: Option<String>,
+    pub(crate) subtitle_stream_index: Option<i32>,
+    pub(crate) subtitle_language: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PlaybackStateResult {
@@ -59,6 +71,7 @@ pub(crate) struct PlaybackStateResult {
     pub(crate) paused: bool,
     pub(crate) muted: bool,
     pub(crate) volume: Option<i32>,
+    pub(crate) speed: Option<f64>,
     #[serde(default)]
     pub(crate) video_ready: bool,
 }

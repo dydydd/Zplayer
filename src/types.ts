@@ -268,7 +268,7 @@ export type PlayResult = {
   logTail: string;
 };
 
-export type PlaybackCommand = "toggle_pause" | "seek_back" | "seek_forward" | `seek_absolute:${number}` | "volume_down" | "volume_up" | `volume_set:${number}` | "toggle_mute" | "audio_next" | "subtitle_next" | `audio_set:${number}` | `subtitle_set:${number}` | "speed_down" | "speed_up" | "resume" | "stop";
+export type PlaybackCommand = "toggle_pause" | "seek_back" | "seek_forward" | `seek_absolute:${number}` | "volume_down" | "volume_up" | `volume_set:${number}` | "toggle_mute" | "audio_next" | "subtitle_next" | `audio_set:${number}` | `subtitle_set:${number}` | "speed_down" | "speed_up" | `speed_set:${number}` | `audio_delay_set:${number}` | `subtitle_delay_set:${number}` | `external_subtitle:${string}` | "resume" | "stop";
 
 export type PlaybackState = {
   timePos?: number | null;
@@ -276,8 +276,21 @@ export type PlaybackState = {
   paused: boolean;
   muted: boolean;
   volume?: number | null;
+  speed?: number | null;
   videoReady: boolean;
 };
+
+export type PlaybackPreferenceInput = {
+  itemId: string;
+  seriesId?: string | null;
+  mediaSourceId?: string | null;
+  audioStreamIndex?: number | null;
+  audioLanguage?: string | null;
+  subtitleStreamIndex?: number | null;
+  subtitleLanguage?: string | null;
+};
+
+export type PlaybackPreference = Omit<PlaybackPreferenceInput, "itemId" | "seriesId">;
 
 export type ServerForm = {
   serverType: "emby" | "jellyfin";

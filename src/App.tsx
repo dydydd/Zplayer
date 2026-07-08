@@ -7,9 +7,9 @@ import { ipc } from "./ipc";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
-import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
+import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
-import { episodePlaybackContext, findKnownItem, libraryKey, relativeEpisodeId } from "./appLogic";
+import { episodePlaybackContext, findKnownItem, libraryKey, playbackPreferenceKey, preferencePayload, preferredStreamIndex, relativeEpisodeId } from "./appLogic";
 import "./App.css";
 
 type HistoryEntry = {
@@ -35,6 +35,7 @@ function samePlaybackState(left: PlaybackState | null, right: PlaybackState | nu
     && left?.paused === right?.paused
     && left?.muted === right?.muted
     && left?.volume === right?.volume
+    && left?.speed === right?.speed
     && left?.videoReady === right?.videoReady;
 }
 
@@ -53,6 +54,12 @@ function optimisticPlaybackState(current: PlaybackState | null, command: Playbac
   }
   if (command === "volume_down") return { ...current, volume: Math.max((current.volume ?? 100) - 5, 0) };
   if (command === "volume_up") return { ...current, volume: Math.min((current.volume ?? 100) + 5, 100) };
+  if (command === "speed_down") return { ...current, speed: Math.max((current.speed ?? 1) - 0.1, 0.5) };
+  if (command === "speed_up") return { ...current, speed: Math.min((current.speed ?? 1) + 0.1, 2) };
+  if (command.startsWith("speed_set:")) {
+    const speed = Number(command.slice("speed_set:".length));
+    return Number.isFinite(speed) ? { ...current, speed: Math.min(Math.max(speed, 0.5), 2) } : current;
+  }
   if (command.startsWith("volume_set:")) {
     const volume = Number(command.slice("volume_set:".length));
     return Number.isFinite(volume) ? { ...current, muted: volume === 0, volume: Math.min(Math.max(volume, 0), 100) } : current;
@@ -114,6 +121,7 @@ function App() {
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
   const [playbackState, setPlaybackState] = useState<PlaybackState | null>(null);
+  const [playbackPreferences, setPlaybackPreferences] = useState<Record<string, PlaybackPreference>>({});
   const [playerTransparent, setPlayerTransparent] = useState(false);
   const [playerSources, setPlayerSources] = useState<MediaVersion[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -173,6 +181,17 @@ function App() {
   useEffect(() => {
     if (!resolvedSettings.diagnosticsEnabled) setLastPlayResult(null);
   }, [resolvedSettings.diagnosticsEnabled]);
+
+  useEffect(() => {
+    if (!activeServer) {
+      setPlaybackPreferences({});
+      return;
+    }
+    ipc.loadPlaybackPreferences()
+      .then(setPlaybackPreferences)
+      .catch(() => setPlaybackPreferences({}));
+  }, [activeServer?.id]);
+
   useEffect(() => {
     void refreshServers();
     void loadSettings();
@@ -754,11 +773,15 @@ function App() {
   }
 
   async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) {
+    const knownItem = findKnownItem(itemId, home, library, detail);
     const title = detail?.item.id === itemId
       ? detail.item.name
-      : findKnownItem(itemId, home, library, detail)?.name ?? "正在播放";
-    const source = mediaSourceForPlayback(sources, mediaSourceId);
-    const subtitleSelection = resolveSubtitleSelection(source, subtitleStreamIndex, resolvedSettings.subtitleMode);
+      : knownItem?.name ?? "正在播放";
+    const preference = playbackPreferences[playbackPreferenceKey(itemId, knownItem?.seriesId)];
+    const source = mediaSourceForPlayback(sources, mediaSourceId ?? preference?.mediaSourceId ?? undefined);
+    const preferredAudioIndex = audioStreamIndex ?? preferredStreamIndex(source?.audioStreams ?? [], preference?.audioStreamIndex, preference?.audioLanguage);
+    const preferredSubtitleIndex = subtitleStreamIndex ?? preferredStreamIndex(source?.subtitleStreams ?? [], preference?.subtitleStreamIndex, preference?.subtitleLanguage);
+    const subtitleSelection = resolveSubtitleSelection(source, preferredSubtitleIndex, resolvedSettings.subtitleMode);
     setPlaybackState(null);
     if (sources?.length) {
       setPlayerSources(sources);
@@ -775,8 +798,8 @@ function App() {
     const result = await run("启动 mpv", () =>
       ipc.playItem(
         itemId,
-        mediaSourceId,
-        audioStreamIndex,
+        source?.id ?? mediaSourceId,
+        preferredAudioIndex,
         subtitleSelection.subtitleStreamIndex,
         subtitleSelection.subtitleStreamPosition,
       ),
@@ -789,7 +812,7 @@ function App() {
         itemId: result.itemId,
         title,
         playSessionId: result.playSessionId,
-        mediaSourceId: result.mediaSourceId ?? mediaSourceId ?? null,
+        mediaSourceId: result.mediaSourceId ?? source?.id ?? mediaSourceId ?? null,
         subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
         episodeIds: episodeContext?.episodeIds ?? null,
         episodeIndex: episodeContext?.episodeIndex ?? null,
@@ -799,6 +822,13 @@ function App() {
       } else {
         openView(playerView);
       }
+      rememberPlaybackPreference(preferencePayload(
+        result.itemId,
+        findKnownItem(result.itemId, home, library, detail)?.seriesId,
+        source,
+        preferredAudioIndex,
+        subtitleSelection.subtitleStreamIndex,
+      ));
     }
   }
 
@@ -860,7 +890,28 @@ function App() {
         episodeIds: view.episodeIds ?? null,
         episodeIndex: view.episodeIndex ?? null,
       });
+      rememberPlaybackPreference(preferencePayload(
+        result.itemId,
+        findKnownItem(result.itemId, home, library, detail)?.seriesId,
+        nextSource,
+        undefined,
+        subtitleSelection.subtitleStreamIndex,
+      ));
     }
+  }
+
+  function rememberPlaybackPreference(input: PlaybackPreferenceInput) {
+    setPlaybackPreferences((current) => ({
+      ...current,
+      [playbackPreferenceKey(input.itemId, input.seriesId)]: {
+        mediaSourceId: input.mediaSourceId,
+        audioStreamIndex: input.audioStreamIndex,
+        audioLanguage: input.audioLanguage,
+        subtitleStreamIndex: input.subtitleStreamIndex,
+        subtitleLanguage: input.subtitleLanguage,
+      },
+    }));
+    void ipc.savePlaybackPreference(input).catch(() => {});
   }
 
   async function controlPlayback(playSessionId: string | null | undefined, command: PlaybackCommand) {
@@ -1118,6 +1169,16 @@ function App() {
             currentSourceId={view.mediaSourceId ?? null}
             initialSubtitleIndex={view.subtitleStreamIndex ?? undefined}
             onSwitchSource={switchPlayerSource}
+            onPreferenceChange={(audioIndex, subtitleIndex) => {
+              const source = playerSources.find((entry) => entry.id === view.mediaSourceId) ?? playerSources[0];
+              rememberPlaybackPreference(preferencePayload(
+                view.itemId,
+                findKnownItem(view.itemId, home, library, detail)?.seriesId,
+                source,
+                audioIndex,
+                subtitleIndex,
+              ));
+            }}
           />
         )}
       </section>

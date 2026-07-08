@@ -40,6 +40,8 @@ pub fn run() {
             commands::play_item,
             commands::control_playback,
             commands::playback_state,
+            commands::save_playback_preference,
+            commands::load_playback_preferences,
             commands::mark_favorite,
             commands::mark_played,
             commands::fetch_server_name,

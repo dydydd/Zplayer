@@ -1,4 +1,4 @@
-import type { HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem } from "./types";
+import type { HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem, MediaVersion } from "./types";
 
 export function libraryKey(libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters = {}) {
   return `${libraryId}:${itemType}:${sortBy}:${sortOrder}:${JSON.stringify(filters)}`;
@@ -37,4 +37,44 @@ export function episodePlaybackContext(itemId: string, episodeIds: string[]): Ep
 export function relativeEpisodeId(context: EpisodePlaybackContext | null | undefined, offset: -1 | 1) {
   if (!context) return undefined;
   return context.episodeIds[context.episodeIndex + offset];
+}
+
+export function streamLanguage(stream?: { language?: string | null }) {
+  return stream?.language?.trim().toLowerCase() || undefined;
+}
+
+export function playbackPreferenceKey(itemId: string, seriesId?: string | null) {
+  return seriesId ? `series:${seriesId}` : `item:${itemId}`;
+}
+
+export function preferredStreamIndex(
+  streams: { index?: number | null; language?: string | null }[],
+  preferredIndex?: number | null,
+  preferredLanguage?: string | null,
+) {
+  if (preferredIndex !== undefined && preferredIndex !== null && (preferredIndex < 0 || streams.some((stream) => stream.index === preferredIndex))) {
+    return preferredIndex;
+  }
+  const language = preferredLanguage?.trim().toLowerCase();
+  return language ? streams.find((stream) => streamLanguage(stream) === language)?.index ?? undefined : undefined;
+}
+
+export function preferencePayload(
+  itemId: string,
+  seriesId: string | null | undefined,
+  source: MediaVersion | undefined,
+  audioIndex: number | undefined,
+  subtitleIndex: number | undefined,
+) {
+  const audio = source?.audioStreams.find((stream) => stream.index === audioIndex);
+  const subtitle = source?.subtitleStreams.find((stream) => stream.index === subtitleIndex);
+  return {
+    itemId,
+    seriesId,
+    mediaSourceId: source?.id,
+    audioStreamIndex: audioIndex,
+    audioLanguage: streamLanguage(audio),
+    subtitleStreamIndex: subtitleIndex,
+    subtitleLanguage: streamLanguage(subtitle),
+  };
 }

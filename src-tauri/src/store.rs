@@ -1,4 +1,4 @@
-use crate::models::{AppSettings, SavedServer, SavedServerSummary, ServerStore};
+use crate::models::{AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerStore};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -134,6 +134,39 @@ pub(crate) fn recent_play_ids(app: &AppHandle, server_id: &str) -> Result<Vec<St
         .unwrap_or_default())
 }
 
+pub(crate) fn playback_preference_key(series_id: Option<&str>, item_id: &str) -> String {
+    match series_id.filter(|value| !value.is_empty()) {
+        Some(series_id) => format!("series:{series_id}"),
+        None => format!("item:{item_id}"),
+    }
+}
+
+pub(crate) fn save_playback_preference(
+    app: &AppHandle,
+    server_id: &str,
+    key: String,
+    preference: PlaybackPreference,
+) -> Result<(), String> {
+    let mut store = load_store(app)?;
+    store
+        .playback_preferences
+        .entry(server_id.to_string())
+        .or_default()
+        .insert(key, preference);
+    save_store(app, &store)
+}
+
+pub(crate) fn playback_preferences(
+    app: &AppHandle,
+    server_id: &str,
+) -> Result<std::collections::HashMap<String, PlaybackPreference>, String> {
+    Ok(load_store(app)?
+        .playback_preferences
+        .get(server_id)
+        .cloned()
+        .unwrap_or_default())
+}
+
 pub(crate) fn server_summary(server: &SavedServer) -> SavedServerSummary {
     SavedServerSummary {
         id: server.id.clone(),
@@ -210,5 +243,17 @@ mod tests {
         assert_eq!(updated.first(), Some(&"item-20".to_string()));
         assert_eq!(updated.len(), 50);
         assert_eq!(updated.iter().filter(|id| *id == "item-20").count(), 1);
+    }
+
+    #[test]
+    fn playback_preference_key_prefers_series_then_item() {
+        assert_eq!(
+            playback_preference_key(Some("series-1"), "episode-1"),
+            "series:series-1"
+        );
+        assert_eq!(
+            playback_preference_key(None, "movie-1"),
+            "item:movie-1"
+        );
     }
 }
