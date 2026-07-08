@@ -45,6 +45,15 @@ export function LoadingPage() {
   return <div className="loading-page" aria-label="加载中" />;
 }
 
+export function EmptyState({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="empty-panel">
+      <strong>{title}</strong>
+      {actionLabel && onAction && <button onClick={onAction}>{actionLabel}</button>}
+    </div>
+  );
+}
+
 export function ShelfHeader({
   title,
   libraryId,

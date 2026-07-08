@@ -242,6 +242,8 @@
 
 .empty-panel {
   display: grid;
+  align-content: center;
+  gap: 12px;
   min-height: 220px;
   place-items: center;
   margin-top: 28px;
@@ -252,6 +254,20 @@
     rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.62);
   font-size: 18px;
+  font-weight: 900;
+}
+
+.empty-panel strong {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.empty-panel button {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
   font-weight: 900;
 }
 
@@ -343,4 +359,3 @@
   font-size: 14px;
   font-weight: 900;
 }
-

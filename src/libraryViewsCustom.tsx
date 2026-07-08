@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem, PosterDensity } from "./types";
-import { Poster, useFloatingBackVisible } from "./viewParts";
+import { EmptyState, Poster, useFloatingBackVisible } from "./viewParts";
 
 const typeOptions: { value: LibraryItemType; label: string }[] = [
   { value: "", label: "全部" },
@@ -73,7 +73,7 @@ export function LibraryView({
           <FilterMenu label="方向" value={sortOrder} options={orderOptions} onChange={(value) => onOptionsChange(itemType, sortBy, value)} />
         </div>
       </div>
-      {!payload.items.length && !loadingMore && <div className="empty-panel">这个媒体库暂时没有可显示的项目</div>}
+      {!payload.items.length && !loadingMore && <EmptyState title="这个媒体库暂时没有可显示的项目" />}
       <div className={`poster-grid poster-density-${posterDensity}`} ref={gridRef}>
         {payload.items.map((item) => (
           <Poster key={item.id} item={item} onOpen={onOpenItem} hideMeta />
@@ -161,7 +161,7 @@ export function SearchOverlay({
       <p className="search-count">
         {loading ? "搜索中..." : results.length ? `找到 ${results.length} 个结果` : `没有找到“${query}”`}
       </p>
-      {!loading && !results.length && <div className="empty-panel">换个关键词试试</div>}
+      {!loading && !results.length && <EmptyState title="换个关键词试试" />}
       <div className={`poster-grid poster-density-${posterDensity} ${loading ? "is-loading" : ""}`}>
         {results.map((item) => (
           <Poster key={item.id} item={item} onOpen={onOpen} />

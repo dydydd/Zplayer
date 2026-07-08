@@ -2,7 +2,7 @@
 import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { bg, itemMeta } from "./media";
 import { rotateDaily } from "./viewLogic";
-import { Image, ScrollableStage, ShelfHeader } from "./viewParts";
+import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
 
 export function HomeView({
   home,
@@ -163,6 +163,9 @@ export function HomeView({
             showProgress
           />
       </section>
+      {home && !home.resumeItems.length && !home.libraries.length && !home.libraryLatest.length && (
+        <EmptyState title="这个服务器暂时没有可显示的媒体" onAction={onOpenServers} actionLabel="服务器管理" />
+      )}
       <div className="home-shelves">
         {home?.libraries.length ? (
           <LibraryShelf libraries={home.libraries} onOpenLibrary={onOpenLibrary} />
