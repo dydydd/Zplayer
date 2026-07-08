@@ -42,6 +42,8 @@ export function LibraryView({
   filters,
   posterDensity,
   onOptionsChange,
+  onToggleFavorite,
+  onTogglePlayed,
 }: {
   payload: LibraryPayload;
   title?: string;
@@ -55,6 +57,8 @@ export function LibraryView({
   filters: LibraryFilters;
   posterDensity: PosterDensity;
   onOptionsChange: (itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters) => void;
+  onToggleFavorite: (item: MediaItem) => void;
+  onTogglePlayed: (item: MediaItem) => void;
 }) {
   const backVisible = useFloatingBackVisible(payload.library.id);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +95,7 @@ export function LibraryView({
       {!payload.items.length && !loadingMore && <div className="empty-panel">这个媒体库暂时没有可显示的项目</div>}
       <div className={`poster-grid poster-density-${posterDensity}`} ref={gridRef}>
         {payload.items.map((item) => (
-          <Poster key={item.id} item={item} onOpen={onOpenItem} hideMeta />
+          <Poster key={item.id} item={item} onOpen={onOpenItem} hideMeta onToggleFavorite={onToggleFavorite} onTogglePlayed={onTogglePlayed} />
         ))}
       </div>
       {loadingMore && <div className="loading-more">加载中...</div>}

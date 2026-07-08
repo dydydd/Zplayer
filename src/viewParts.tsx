@@ -161,16 +161,36 @@ export function ScrollableStage({
   );
 }
 
-export const Poster = memo(function Poster({ item, onOpen, hideMeta = false }: { item: MediaItem; onOpen: (id: string) => void; hideMeta?: boolean }) {
+export const Poster = memo(function Poster({
+  item,
+  onOpen,
+  hideMeta = false,
+  onToggleFavorite,
+  onTogglePlayed,
+}: {
+  item: MediaItem;
+  onOpen: (id: string) => void;
+  hideMeta?: boolean;
+  onToggleFavorite?: (item: MediaItem) => void;
+  onTogglePlayed?: (item: MediaItem) => void;
+}) {
   return (
-    <button className="poster" onClick={() => onOpen(item.id)}>
-      <span className="poster-cover">
-        <Image src={item.primaryImageUrl} alt={item.name} />
-        {item.communityRating && <span className="score">{item.communityRating.toFixed(1)}</span>}
-      </span>
-      <strong>{item.name}</strong>
-      {!hideMeta && <small>{itemMeta(item)}</small>}
-    </button>
+    <article className="poster">
+      <button className="poster-main" onClick={() => onOpen(item.id)}>
+        <span className="poster-cover">
+          <Image src={item.primaryImageUrl} alt={item.name} />
+          {item.communityRating && <span className="score">{item.communityRating.toFixed(1)}</span>}
+        </span>
+        <strong>{item.name}</strong>
+        {!hideMeta && <small>{itemMeta(item)}</small>}
+      </button>
+      {(onToggleFavorite || onTogglePlayed) && (
+        <div className="poster-actions">
+          {onToggleFavorite && <button type="button" onClick={() => onToggleFavorite(item)}>{item.favorite ? "已收藏" : "收藏"}</button>}
+          {onTogglePlayed && <button type="button" onClick={() => onTogglePlayed(item)}>{item.played ? "已看" : "标记"}</button>}
+        </div>
+      )}
+    </article>
   );
 });
 

@@ -436,6 +436,7 @@ function App() {
 
   function invalidatePlaybackCaches(itemId?: string | null) {
     homeCache.current.clear();
+    libraryCache.current.clear();
     if (itemId) detailCache.current.delete(itemId);
   }
 
@@ -709,6 +710,24 @@ function App() {
     setView({ ...view, itemType, sortBy, sortOrder, filters });
   }
 
+  async function toggleItemFavorite(item: MediaItem) {
+    const nextValue = !item.favorite;
+    const result = await run(nextValue ? "收藏媒体" : "取消收藏", () => ipc.markFavorite(item.id, nextValue));
+    if (result !== null) {
+      invalidatePlaybackCaches(item.id);
+      if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
+    }
+  }
+
+  async function toggleItemPlayed(item: MediaItem) {
+    const nextValue = !item.played;
+    const result = await run(nextValue ? "标记已看" : "标记未看", () => ipc.markPlayed(item.id, nextValue));
+    if (result !== null) {
+      invalidatePlaybackCaches(item.id);
+      if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
+    }
+  }
+
   async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[]) {
     const title = detail?.item.id === itemId
       ? detail.item.name
@@ -965,6 +984,8 @@ function App() {
             filters={view.filters ?? {}}
             posterDensity={resolvedSettings.posterDensity}
             onOptionsChange={updateLibraryOptions}
+            onToggleFavorite={(item) => void toggleItemFavorite(item)}
+            onTogglePlayed={(item) => void toggleItemPlayed(item)}
           />
         )}
         {!searchQuery.trim() && view.name === "library" && library?.library.id !== view.id && <LoadingPage />}
