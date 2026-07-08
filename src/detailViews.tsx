@@ -448,6 +448,9 @@ export function PlayerView({
   const [menu, setMenu] = useState<"source" | "audio" | "subtitle" | null>(null);
   const [audioIndex, setAudioIndex] = useState<number>();
   const [subtitleIndex, setSubtitleIndex] = useState<number | undefined>(initialSubtitleIndex);
+  const [subtitleDelay, setSubtitleDelay] = useState(0);
+  const [audioDelay, setAudioDelay] = useState(0);
+  const [externalSubtitle, setExternalSubtitle] = useState("");
   const hideTimer = useRef<number | undefined>(undefined);
   const lastControlsShownAt = useRef(0);
   const onCommandRef = useRef(onCommand);
@@ -563,7 +566,11 @@ export function PlayerView({
           <button className={menu === "audio" ? "active" : ""} onClick={() => setMenu(menu === "audio" ? null : "audio")}><span>音轨</span><strong>{streamLabel(selectedAudio) ?? "选择音轨"}</strong></button>
           <button className={menu === "subtitle" ? "active" : ""} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")}><span>字幕</span><strong>{subtitleIndex === -1 ? "无字幕" : streamLabel(selectedSubtitle) ?? "选择字幕"}</strong></button>
           <button className={menu === "source" ? "active" : ""} onClick={() => setMenu(menu === "source" ? null : "source")}><span>版本 / 画质</span><strong>{currentSource ? qualityLabel(currentSource) : "选择版本"}</strong></button>
-          <button onClick={() => void onCommand("speed_down")}><span>速度</span><strong>{speed.toFixed(2)}x</strong></button>
+          <div className="player-speed-control">
+            <button onClick={() => void onCommand(`speed_set:${Math.max(0.5, speed - 0.1)}`)}><span>速度</span><strong>-</strong></button>
+            <button onClick={() => void onCommand("speed_set:1")}><span>{speed.toFixed(2)}x</span><strong>重置</strong></button>
+            <button onClick={() => void onCommand(`speed_set:${Math.min(2, speed + 0.1)}`)}><span>速度</span><strong>+</strong></button>
+          </div>
           <div className="player-volume-control">
             <button onClick={() => void onCommand("toggle_mute")}><span>声音</span><strong>{state?.muted ? "已静音" : `${volume}%`}</strong></button>
             <input
@@ -575,6 +582,31 @@ export function PlayerView({
               aria-label="音量"
             />
           </div>
+          <div className="player-delay-control">
+            <button onClick={() => {
+              const next = Number((subtitleDelay - 0.25).toFixed(2));
+              setSubtitleDelay(next);
+              void onCommand(`subtitle_delay_set:${next}`);
+            }}><span>字幕延迟</span><strong>-0.25</strong></button>
+            <button onClick={() => {
+              const next = Number((subtitleDelay + 0.25).toFixed(2));
+              setSubtitleDelay(next);
+              void onCommand(`subtitle_delay_set:${next}`);
+            }}><span>{subtitleDelay.toFixed(2)}s</span><strong>+0.25</strong></button>
+            <button onClick={() => {
+              const next = Number((audioDelay + 0.25).toFixed(2));
+              setAudioDelay(next);
+              void onCommand(`audio_delay_set:${next}`);
+            }}><span>音频延迟</span><strong>{audioDelay.toFixed(2)}s</strong></button>
+          </div>
+          <form className="external-subtitle-form" onSubmit={(event) => {
+            event.preventDefault();
+            const target = externalSubtitle.trim();
+            if (target) void onCommand(`external_subtitle:${target}`);
+          }}>
+            <input value={externalSubtitle} onChange={(event) => setExternalSubtitle(event.currentTarget.value)} aria-label="字幕路径或 URL" />
+            <button>加载字幕</button>
+          </form>
         </div>
         {menu && (
           <div className="player-select-menu" onMouseEnter={() => window.clearTimeout(hideTimer.current)}>

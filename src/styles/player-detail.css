@@ -280,6 +280,22 @@
   accent-color: #fff;
 }
 
+.player-speed-control,
+.player-delay-control,
+.external-subtitle-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.external-subtitle-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.external-subtitle-form input {
+  min-width: 0;
+}
+
 .player-select-menu {
   position: absolute;
   right: 14px;
