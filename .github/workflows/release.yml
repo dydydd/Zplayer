@@ -30,8 +30,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: Check
+  preflight:
+    name: Preflight
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -62,7 +62,7 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.platform }}
-    needs: check
+    needs: preflight
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
