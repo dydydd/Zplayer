@@ -253,6 +253,7 @@ export type PlaybackState = {
   paused: boolean;
   muted: boolean;
   volume?: number | null;
+  speed?: number | null;
   videoReady: boolean;
 };
 

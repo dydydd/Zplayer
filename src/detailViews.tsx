@@ -440,6 +440,7 @@ export function PlayerView({
   const duration = state?.duration ?? 0;
   const percent = duration > 0 ? Math.min(Math.max((time / duration) * 100, 0), 100) : 0;
   const volume = Math.round(state?.volume ?? 100);
+  const speed = state?.speed ?? 1;
   const currentSource = sources.find((source) => source.id === currentSourceId) ?? sources[0];
   const [visible, setVisible] = useState(true);
   const [menu, setMenu] = useState<"source" | "audio" | "subtitle" | null>(null);
@@ -560,6 +561,7 @@ export function PlayerView({
           <button className={menu === "audio" ? "active" : ""} onClick={() => setMenu(menu === "audio" ? null : "audio")}><span>音轨</span><strong>{streamLabel(selectedAudio) ?? "选择音轨"}</strong></button>
           <button className={menu === "subtitle" ? "active" : ""} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")}><span>字幕</span><strong>{subtitleIndex === -1 ? "无字幕" : streamLabel(selectedSubtitle) ?? "选择字幕"}</strong></button>
           <button className={menu === "source" ? "active" : ""} onClick={() => setMenu(menu === "source" ? null : "source")}><span>版本 / 画质</span><strong>{currentSource ? qualityLabel(currentSource) : "选择版本"}</strong></button>
+          <button onClick={() => void onCommand("speed_down")}><span>速度</span><strong>{speed.toFixed(2)}x</strong></button>
           <div className="player-volume-control">
             <button onClick={() => void onCommand("toggle_mute")}><span>声音</span><strong>{state?.muted ? "已静音" : `${volume}%`}</strong></button>
             <input

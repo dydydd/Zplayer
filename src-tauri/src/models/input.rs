@@ -48,6 +48,7 @@ pub(crate) struct PlaybackStateResult {
     pub(crate) paused: bool,
     pub(crate) muted: bool,
     pub(crate) volume: Option<i32>,
+    pub(crate) speed: Option<f64>,
     #[serde(default)]
     pub(crate) video_ready: bool,
 }

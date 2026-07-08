@@ -456,13 +456,14 @@ local video_ready = false
 local function write_progress()
   local file = io.open(progress_path, "w")
   if not file then return end
-  file:write(string.format('{{"timePos":%.3f,"duration":%.3f,"paused":%s,"muted":%s,"volume":%.0f,"videoReady":%s}}',
+  file:write(string.format('{{"timePos":%.3f,"duration":%.3f,"paused":%s,"muted":%s,"volume":%.0f,"videoReady":%s,"speed":%.2f}}',
     mp.get_property_number("time-pos", 0),
     mp.get_property_number("duration", 0),
     tostring(mp.get_property_bool("pause", false)),
     tostring(mp.get_property_bool("mute", false)),
     mp.get_property_number("volume", 100),
-    tostring(video_ready)))
+    tostring(video_ready),
+    mp.get_property_number("speed", 1)))
   file:close()
 end
 
@@ -798,6 +799,11 @@ mod tests {
         )
         .unwrap();
         assert!(state.video_ready);
+        let state = parse_state(
+            r#"{"timePos":12.5,"duration":120.0,"paused":false,"muted":true,"volume":42,"videoReady":true,"speed":1.25}"#,
+        )
+        .unwrap();
+        assert_eq!(state.speed, Some(1.25));
     }
 
     #[test]
@@ -875,6 +881,7 @@ mod tests {
             paused: false,
             muted: true,
             volume: Some(55),
+            speed: Some(1.0),
             video_ready: true,
         };
 
@@ -901,6 +908,7 @@ mod tests {
                 paused: false,
                 muted: false,
                 volume: Some(100),
+                speed: Some(1.0),
                 video_ready: false,
             },
         );
