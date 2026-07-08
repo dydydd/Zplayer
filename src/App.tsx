@@ -7,7 +7,7 @@ import { ipc } from "./ipc";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
-import type { AppSettings, HomePayload, ItemDetailPayload, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
+import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
 import { findKnownItem, libraryKey } from "./appLogic";
 import "./App.css";
@@ -240,7 +240,7 @@ function App() {
       void loadHome();
     }
     if (view.name === "library") {
-      void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending");
+      void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
     }
     if (view.name === "detail") {
       void loadDetail(view.id);
@@ -491,17 +491,17 @@ function App() {
     }
   }
 
-  async function loadLibrary(libraryId: string, itemType: LibraryItemType = "", sortBy: LibrarySortBy = "DateCreated", sortOrder: LibrarySortOrder = "Descending") {
-    const key = libraryKey(libraryId, itemType, sortBy, sortOrder);
+  async function loadLibrary(libraryId: string, itemType: LibraryItemType = "", sortBy: LibrarySortBy = "DateCreated", sortOrder: LibrarySortOrder = "Descending", filters: LibraryFilters = {}) {
+    const key = libraryKey(libraryId, itemType, sortBy, sortOrder, filters);
     const cached = resolvedSettings.metadataCacheEnabled ? libraryCache.current.get(key) : null;
     if (cached) {
       setLibrary(cached);
-      void refreshLibraryInBackground(key, libraryId, itemType, sortBy, sortOrder);
+      void refreshLibraryInBackground(key, libraryId, itemType, sortBy, sortOrder, filters);
       return;
     }
     const currentRequest = ++requestId.current;
     const result = await run("加载媒体库", () =>
-      ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder),
+      ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder, filters),
     );
     if (result && currentRequest === requestId.current) {
       if (resolvedSettings.metadataCacheEnabled) libraryCache.current.set(key, result);
@@ -509,11 +509,20 @@ function App() {
     }
   }
 
-  async function refreshLibraryInBackground(key: string, libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder) {
+  async function refreshLibraryInBackground(key: string, libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters) {
     try {
-      const result = await ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder);
+      const result = await ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder, filters);
       if (resolvedSettings.metadataCacheEnabled) libraryCache.current.set(key, result);
-      if (viewRef.current.name === "library" && viewRef.current.id === libraryId) setLibrary(result);
+      if (viewRef.current.name === "library") {
+        const currentKey = libraryKey(
+          viewRef.current.id,
+          viewRef.current.itemType ?? "",
+          viewRef.current.sortBy ?? "DateCreated",
+          viewRef.current.sortOrder ?? "Descending",
+          viewRef.current.filters ?? {},
+        );
+        if (currentKey === key) setLibrary(result);
+      }
     } catch {
       // ponytail: cached library remains usable during refresh failures.
     }
@@ -532,6 +541,7 @@ function App() {
         view.name === "library" ? view.itemType ?? "" : "",
         view.name === "library" ? view.sortBy ?? "DateCreated" : "DateCreated",
         view.name === "library" ? view.sortOrder ?? "Descending" : "Descending",
+        view.name === "library" ? view.filters ?? {} : {},
       );
       setLibrary((existing) => {
         if (!existing || existing.library.id !== currentLibrary.library.id) return existing;
@@ -543,7 +553,8 @@ function App() {
         const itemType = view.name === "library" ? view.itemType ?? "" : "";
         const sortBy = view.name === "library" ? view.sortBy ?? "DateCreated" : "DateCreated";
         const sortOrder = view.name === "library" ? view.sortOrder ?? "Descending" : "Descending";
-        if (resolvedSettings.metadataCacheEnabled) libraryCache.current.set(libraryKey(next.library.id, itemType, sortBy, sortOrder), next);
+        const filters = view.name === "library" ? view.filters ?? {} : {};
+        if (resolvedSettings.metadataCacheEnabled) libraryCache.current.set(libraryKey(next.library.id, itemType, sortBy, sortOrder, filters), next);
         return next;
       });
     } catch (err) {
@@ -692,10 +703,10 @@ function App() {
     setModalOpen(true);
   }
 
-  function updateLibraryOptions(itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder) {
+  function updateLibraryOptions(itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters) {
     if (view.name !== "library") return;
     setLibrary(null);
-    setView({ name: "library", id: view.id, itemType, sortBy, sortOrder });
+    setView({ ...view, itemType, sortBy, sortOrder, filters });
   }
 
   async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[]) {
@@ -848,6 +859,15 @@ function App() {
   const openServers = useCallback(() => openView({ name: "servers" }), [openView]);
   const openSettings = useCallback(() => openView({ name: "settings" }), [openView]);
   const openLibrary = useCallback((id: string) => openView({ name: "library", id }), [openView]);
+  const openFavorites = useCallback(() => {
+    setLibrary(null);
+    openView({
+      name: "library",
+      id: "",
+      title: "收藏",
+      filters: { favorite: true },
+    });
+  }, [openView]);
   const openDetail = useCallback((id: string) => openView({ name: "detail", id }), [openView]);
 
   const openSearchResult = useCallback((itemId: string) => {
@@ -921,6 +941,7 @@ function App() {
             onAddServer={() => setModalOpen(true)}
             onOpenServers={openServers}
             onOpenSettings={openSettings}
+            onOpenFavorites={openFavorites}
             onActivateServer={activateServer}
             onOpenLibrary={openLibrary}
             onOpenItem={openDetail}
@@ -933,6 +954,7 @@ function App() {
         {!searchQuery.trim() && view.name === "library" && library?.library.id === view.id && (
           <LibraryView
             payload={library}
+            title={view.title}
             loadingMore={libraryLoadingMore}
             onBack={goBack}
             onOpenItem={openDetail}
@@ -940,6 +962,7 @@ function App() {
             itemType={view.itemType ?? ""}
             sortBy={view.sortBy ?? "DateCreated"}
             sortOrder={view.sortOrder ?? "Descending"}
+            filters={view.filters ?? {}}
             posterDensity={resolvedSettings.posterDensity}
             onOptionsChange={updateLibraryOptions}
           />

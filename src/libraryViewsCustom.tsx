@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem, PosterDensity } from "./types";
+import type { LibraryFilters, LibraryItemType, LibraryPayload, LibraryPlayedFilter, LibrarySortBy, LibrarySortOrder, MediaItem, PosterDensity } from "./types";
 import { Poster, useFloatingBackVisible } from "./viewParts";
 
 const typeOptions: { value: LibraryItemType; label: string }[] = [
@@ -19,9 +19,19 @@ const orderOptions: { value: LibrarySortOrder; label: string }[] = [
   { value: "Descending", label: "降序" },
   { value: "Ascending", label: "升序" },
 ];
+const playedOptions: { value: LibraryPlayedFilter; label: string }[] = [
+  { value: "", label: "全部" },
+  { value: "unplayed", label: "未看" },
+  { value: "played", label: "已看" },
+];
+const favoriteOptions = [
+  { value: "", label: "全部" },
+  { value: "favorite", label: "收藏" },
+] as const;
 
 export function LibraryView({
   payload,
+  title,
   loadingMore,
   onBack,
   onOpenItem,
@@ -29,10 +39,12 @@ export function LibraryView({
   itemType,
   sortBy,
   sortOrder,
+  filters,
   posterDensity,
   onOptionsChange,
 }: {
   payload: LibraryPayload;
+  title?: string;
   loadingMore: boolean;
   onBack: () => void;
   onOpenItem: (id: string) => void;
@@ -40,8 +52,9 @@ export function LibraryView({
   itemType: LibraryItemType;
   sortBy: LibrarySortBy;
   sortOrder: LibrarySortOrder;
+  filters: LibraryFilters;
   posterDensity: PosterDensity;
-  onOptionsChange: (itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder) => void;
+  onOptionsChange: (itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters) => void;
 }) {
   const backVisible = useFloatingBackVisible(payload.library.id);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -65,12 +78,14 @@ export function LibraryView({
     <div className="page library-page">
       <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label="返回" />
       <div className="library-heading">
-        <h1>{payload.library.name}</h1>
+        <h1>{title ?? payload.library.name}</h1>
         <div className="filters">
           <span>{payload.totalCount} 项</span>
-          <FilterMenu label="类型" value={itemType} options={typeOptions} onChange={(value) => onOptionsChange(value, sortBy, sortOrder)} />
-          <FilterMenu label="排序" value={sortBy} options={sortOptions} onChange={(value) => onOptionsChange(itemType, value, sortOrder)} />
-          <FilterMenu label="方向" value={sortOrder} options={orderOptions} onChange={(value) => onOptionsChange(itemType, sortBy, value)} />
+          <FilterMenu label="类型" value={itemType} options={typeOptions} onChange={(value) => onOptionsChange(value, sortBy, sortOrder, filters)} />
+          <FilterMenu label="排序" value={sortBy} options={sortOptions} onChange={(value) => onOptionsChange(itemType, value, sortOrder, filters)} />
+          <FilterMenu label="方向" value={sortOrder} options={orderOptions} onChange={(value) => onOptionsChange(itemType, sortBy, value, filters)} />
+          <FilterMenu label="观看" value={filters.played ?? ""} options={playedOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, played: value })} />
+          <FilterMenu label="收藏" value={filters.favorite ? "favorite" : ""} options={favoriteOptions} onChange={(value) => onOptionsChange(itemType, sortBy, sortOrder, { ...filters, favorite: value === "favorite" || undefined })} />
         </div>
       </div>
       {!payload.items.length && !loadingMore && <div className="empty-panel">这个媒体库暂时没有可显示的项目</div>}
@@ -92,7 +107,7 @@ function FilterMenu<T extends string>({
 }: {
   label: string;
   value: T;
-  options: { value: T; label: string }[];
+  options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   const [open, setOpen] = useState(false);
