@@ -7,7 +7,7 @@ import { ipc } from "./ipc";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
-import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
+import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
 import { episodePlaybackContext, findKnownItem, libraryKey, playbackPreferenceKey, preferencePayload, preferredStreamIndex, relativeEpisodeId } from "./appLogic";
 import "./App.css";
@@ -122,6 +122,7 @@ function App() {
   const [error, setError] = useState("");
   const [playbackState, setPlaybackState] = useState<PlaybackState | null>(null);
   const [playbackPreferences, setPlaybackPreferences] = useState<Record<string, PlaybackPreference>>({});
+  const [linuxWindowDiagnostics, setLinuxWindowDiagnostics] = useState<LinuxWindowDiagnostics | null>(null);
   const [playerTransparent, setPlayerTransparent] = useState(false);
   const [playerSources, setPlayerSources] = useState<MediaVersion[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -195,6 +196,7 @@ function App() {
   useEffect(() => {
     void refreshServers();
     void loadSettings();
+    void ipc.linuxWindowDiagnostics().then(setLinuxWindowDiagnostics).catch(() => setLinuxWindowDiagnostics(null));
   }, []);
 
   useEffect(() => {
@@ -1093,6 +1095,7 @@ function App() {
           <SettingsView
             settings={settings}
             lastPlayResult={resolvedSettings.diagnosticsEnabled ? lastPlayResult : null}
+            linuxWindowDiagnostics={linuxWindowDiagnostics}
             onBack={goBack}
             onSaveSettings={saveSettings}
           />

@@ -9,6 +9,7 @@ use crate::models::{
     SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
 };
 use crate::mpv;
+use crate::platform_window::{self, LinuxWindowDiagnostics};
 use crate::store;
 use std::thread;
 use std::time::Duration;
@@ -121,6 +122,11 @@ fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> 
 #[tauri::command]
 pub(crate) fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
     store::settings(&app)
+}
+
+#[tauri::command]
+pub(crate) fn linux_window_diagnostics() -> LinuxWindowDiagnostics {
+    platform_window::diagnostics()
 }
 
 #[tauri::command]

@@ -54,6 +54,13 @@ export type AppSettings = {
   autoplayNextEpisode?: boolean;
 };
 
+export type LinuxWindowDiagnostics = {
+  xdgSessionType?: string | null;
+  waylandDisplaySet: boolean;
+  gdkBackend?: string | null;
+  opaqueWindow: boolean;
+};
+
 export type ResolvedAppSettings = {
   mpvPath: string;
   defaultVolume: number;

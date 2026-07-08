@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { AppSettings, PlayResult, SavedServer } from "./types";
+import type { AppSettings, LinuxWindowDiagnostics, PlayResult, SavedServer } from "./types";
 import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 
 export function ServerView({
@@ -97,11 +97,13 @@ export function ServerView({
 export function SettingsView({
   settings,
   lastPlayResult,
+  linuxWindowDiagnostics,
   onBack,
   onSaveSettings,
 }: {
   settings: AppSettings;
   lastPlayResult: PlayResult | null;
+  linuxWindowDiagnostics: LinuxWindowDiagnostics | null;
   onBack: () => void;
   onSaveSettings: (settings: AppSettings) => Promise<void>;
 }) {
@@ -187,6 +189,14 @@ export function SettingsView({
             <div className="diagnostics-box">
               <strong>{lastPlayResult?.logPath ?? "还没有播放日志"}</strong>
               <pre>{lastPlayResult?.logTail || "启动一次播放后，这里会显示 mpv 日志尾部。"}</pre>
+              {linuxWindowDiagnostics && (
+                <pre>{[
+                  `XDG_SESSION_TYPE: ${linuxWindowDiagnostics.xdgSessionType ?? "-"}`,
+                  `WAYLAND_DISPLAY: ${linuxWindowDiagnostics.waylandDisplaySet ? "set" : "-"}`,
+                  `GDK_BACKEND: ${linuxWindowDiagnostics.gdkBackend ?? "-"}`,
+                  `Opaque window: ${linuxWindowDiagnostics.opaqueWindow ? "yes" : "no"}`,
+                ].join("\n")}</pre>
+              )}
             </div>
           )}
         </SettingsPanel>

@@ -2,6 +2,7 @@ mod api;
 mod commands;
 mod models;
 mod mpv;
+mod platform_window;
 mod playback_watch;
 mod store;
 
@@ -11,6 +12,10 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            platform_window::create_main_window(app)?;
+            Ok(())
+        })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { .. } => {
                 mpv::terminate_all();
@@ -45,6 +50,7 @@ pub fn run() {
             commands::mark_favorite,
             commands::mark_played,
             commands::fetch_server_name,
+            commands::linux_window_diagnostics,
             commands::report_playback_start,
             commands::report_playback_progress,
             commands::report_playback_stopped
