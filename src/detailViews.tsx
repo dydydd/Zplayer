@@ -419,6 +419,7 @@ export function PlayerView({
   currentSourceId,
   initialSubtitleIndex,
   onSwitchSource,
+  onPreferenceChange,
 }: {
   title: string;
   state: PlaybackState | null;
@@ -435,6 +436,7 @@ export function PlayerView({
   currentSourceId: string | null;
   initialSubtitleIndex?: number;
   onSwitchSource: (sourceId?: string) => Promise<void>;
+  onPreferenceChange: (audioIndex?: number, subtitleIndex?: number) => void;
 }) {
   const time = state?.timePos ?? 0;
   const duration = state?.duration ?? 0;
@@ -593,6 +595,7 @@ export function PlayerView({
                 setAudioIndex(nextIndex);
                 setMenu(null);
                 void onCommand(`audio_set:${nextIndex}`);
+                onPreferenceChange(nextIndex, subtitleIndex);
               }}>
                 <strong>{streamLabel(stream) ?? `音轨 ${index + 1}`}</strong>
                 <span>{streamFacts(stream).join(" / ") || "默认音轨"}</span>
@@ -604,6 +607,7 @@ export function PlayerView({
                   setSubtitleIndex(-1);
                   setMenu(null);
                   void onCommand("subtitle_set:-1");
+                  onPreferenceChange(audioIndex, -1);
                 }}><strong>无字幕</strong><span>关闭字幕</span></button>
                 {(currentSource?.subtitleStreams ?? []).map((stream, index) => (
                   <button key={stream.index ?? index} className={stream.index === selectedSubtitle?.index && subtitleIndex !== -1 ? "active" : ""} onClick={() => {
@@ -611,6 +615,7 @@ export function PlayerView({
                     setSubtitleIndex(nextIndex);
                     setMenu(null);
                     void onCommand(`subtitle_set:${index + 1}`);
+                    onPreferenceChange(audioIndex, nextIndex);
                   }}>
                     <strong>{streamLabel(stream) ?? `字幕 ${index + 1}`}</strong>
                     <span>{streamFacts(stream).join(" / ") || "默认字幕"}</span>
