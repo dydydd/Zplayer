@@ -887,6 +887,24 @@ function App() {
       filters: { favorite: true },
     });
   }, [openView]);
+  const openGenre = useCallback((genre: string) => {
+    setLibrary(null);
+    openView({
+      name: "library",
+      id: "",
+      title: genre,
+      filters: { genre },
+    });
+  }, [openView]);
+  const openPerson = useCallback((personId: string, name: string) => {
+    setLibrary(null);
+    openView({
+      name: "library",
+      id: "",
+      title: name,
+      filters: { personId },
+    });
+  }, [openView]);
   const openDetail = useCallback((id: string) => openView({ name: "detail", id }), [openView]);
 
   const openSearchResult = useCallback((itemId: string) => {
@@ -998,6 +1016,8 @@ function App() {
             onPlay={play}
             onRefresh={() => loadDetail(detail.item.id, true)}
             onError={setError}
+            onOpenGenre={openGenre}
+            onOpenPerson={openPerson}
           />
         )}
         {!searchQuery.trim() && view.name === "detail" && !detailMatchesView && <LoadingPage />}

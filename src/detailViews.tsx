@@ -36,6 +36,8 @@ export function DetailView({
   onPlay,
   onRefresh,
   onError,
+  onOpenGenre,
+  onOpenPerson,
 }: {
   payload: ItemDetailPayload;
   entryItemId: string;
@@ -44,6 +46,8 @@ export function DetailView({
   onPlay: (id: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
+  onOpenGenre: (genre: string) => void;
+  onOpenPerson: (personId: string, name: string) => void;
 }) {
   const item = payload.item;
   const backVisible = useFloatingBackVisible(item.id);
@@ -180,7 +184,9 @@ export function DetailView({
           {item.logoUrl ? <img className="detail-logo" src={item.logoUrl} alt={item.name} /> : <h1 className="text-logo">{item.name}</h1>}
           <div className="chips">
             {item.year && <span>{item.year}</span>}
-            {item.genres.slice(0, 3).map((genre) => <span key={genre}>{genre}</span>)}
+            {item.genres.slice(0, 3).map((genre) => (
+              <button key={genre} className="chip-button" onClick={() => onOpenGenre(genre)}>{genre}</button>
+            ))}
             {item.communityRating && <span>评分 {item.communityRating.toFixed(1)}</span>}
           </div>
           <p>{item.overview ?? "暂无简介"}</p>
@@ -343,11 +349,16 @@ export function DetailView({
           <h2>演职人员</h2>
           <div className="people-row">
             {payload.people.slice(0, 3).map((person) => (
-              <div key={`${person.id ?? person.name}-${person.role ?? ""}`} className="person-card">
+              <button
+                key={`${person.id ?? person.name}-${person.role ?? ""}`}
+                className="person-card"
+                onClick={() => person.id && onOpenPerson(person.id, person.name)}
+                disabled={!person.id}
+              >
                 <Image src={person.imageUrl} alt={person.name} />
                 <strong>{person.name}</strong>
                 <span>{person.role ?? person.personType ?? ""}</span>
-              </div>
+              </button>
             ))}
           </div>
         </section>
