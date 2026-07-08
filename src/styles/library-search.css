@@ -195,7 +195,7 @@
 
 .poster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 34px 30px;
   animation: page-enter 0.18s var(--tv-ease) both;
 }
@@ -209,13 +209,13 @@
 
 .library-page .poster-grid,
 .search-page .poster-grid {
-  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   align-items: start;
 }
 
 .library-page .poster-density-compact,
 .search-page .poster-density-compact {
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 26px 20px;
 }
 
@@ -242,6 +242,8 @@
 
 .empty-panel {
   display: grid;
+  align-content: center;
+  gap: 12px;
   min-height: 220px;
   place-items: center;
   margin-top: 28px;
@@ -252,6 +254,20 @@
     rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.62);
   font-size: 18px;
+  font-weight: 900;
+}
+
+.empty-panel strong {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.empty-panel button {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
   font-weight: 900;
 }
 

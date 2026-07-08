@@ -391,6 +391,7 @@
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-top: 22px;
@@ -464,6 +465,21 @@
   -webkit-line-clamp: 8;
 }
 
+.detail-progress {
+  width: min(420px, 100%);
+  height: 4px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.detail-progress span {
+  display: block;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .hero-actions .play {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -510,7 +526,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-width: 920px;
+  max-width: min(760px, 100%);
   margin-top: 16px;
 }
 

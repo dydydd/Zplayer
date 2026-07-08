@@ -2,7 +2,7 @@
 import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { bg, itemMeta } from "./media";
 import { rotateDaily } from "./viewLogic";
-import { Image, ScrollableStage, ShelfHeader } from "./viewParts";
+import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
 
 export function HomeView({
   home,
@@ -145,9 +145,9 @@ export function HomeView({
             {featured.overview && <p>{featured.overview}</p>}
             <div className="feature-actions">
               <button className="feature-play" onClick={() => void onPlay(featured.id)}><span className="play-glyph" />播放</button>
-              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} />
-              <button className="round-icon add-icon" />
-              <button className="round-icon next-icon" />
+              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label="查看详情" />
+              <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label="打开收藏" />
+              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label="下一张推荐" />
             </div>
           </div>
         )}
@@ -176,6 +176,9 @@ export function HomeView({
             showProgress
           />
       </section>
+      {home && !home.resumeItems.length && !home.libraries.length && !home.libraryLatest.length && (
+        <EmptyState title="这个服务器暂时没有可显示的媒体" onAction={onOpenServers} actionLabel="服务器管理" />
+      )}
       <div className="home-shelves">
         {home?.libraries.length ? (
           <LibraryShelf libraries={home.libraries} onOpenLibrary={onOpenLibrary} />

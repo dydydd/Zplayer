@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { ipc } from "./ipc";
 import type { ItemDetailPayload, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
-import { bg, episodeLabel } from "./media";
+import { bg, episodeLabel, runtimeLabel } from "./media";
 import { formatTime, mediaVersionFacts } from "./viewLogic";
 import { Image, Poster, ScrollableStage, useFloatingBackVisible } from "./viewParts";
 
@@ -85,6 +85,7 @@ export function DetailView({
   const selectedAudio = selectedSource?.audioStreams.find((stream) => stream.index === audioStreamIndex) ?? selectedSource?.audioStreams.find((stream) => stream.isDefault) ?? selectedSource?.audioStreams[0];
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
   const currentSeason = payload.seasons.find((season) => season.id === seasonId);
+  const runtime = runtimeLabel(item.runTimeTicks);
 
   useEffect(() => {
     mediaSourcesByItemRef.current = mediaSourcesByItem;
@@ -184,12 +185,19 @@ export function DetailView({
           {item.logoUrl ? <img className="detail-logo" src={item.logoUrl} alt={item.name} /> : <h1 className="text-logo">{item.name}</h1>}
           <div className="chips">
             {item.year && <span>{item.year}</span>}
+            {runtime && <span>{runtime}</span>}
+            {item.officialRating && <span>{item.officialRating}</span>}
+            {item.communityRating && <span>评分 {item.communityRating.toFixed(1)}</span>}
             {item.genres.slice(0, 3).map((genre) => (
               <button key={genre} className="chip-button" onClick={() => onOpenGenre(genre)}>{genre}</button>
             ))}
-            {item.communityRating && <span>评分 {item.communityRating.toFixed(1)}</span>}
           </div>
           <p>{item.overview ?? "暂无简介"}</p>
+          {item.playedPercentage ? (
+            <div className="detail-progress">
+              <span style={{ width: `${Math.min(Math.max(item.playedPercentage, 0), 100)}%` }} />
+            </div>
+          ) : null}
           <div className="hero-actions">
             <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
               <SvgIcon name="play" />
