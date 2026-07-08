@@ -318,7 +318,7 @@ jobs:
         with:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: Zplayer v${{ needs.prepare-release.outputs.version }}
-          body: "Windows, Linux, and macOS builds are attached below."
+          generate_release_notes: true
           files: artifacts/**/*
           overwrite_files: true
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft == 'true' }}
