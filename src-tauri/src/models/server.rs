@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +67,18 @@ pub(crate) struct ServerStore {
     pub(crate) servers: Vec<SavedServer>,
     #[serde(default)]
     pub(crate) settings: AppSettings,
+    #[serde(default)]
+    pub(crate) playback_preferences: HashMap<String, HashMap<String, PlaybackPreference>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct PlaybackPreference {
+    pub(crate) media_source_id: Option<String>,
+    pub(crate) audio_stream_index: Option<i32>,
+    pub(crate) audio_language: Option<String>,
+    pub(crate) subtitle_stream_index: Option<i32>,
+    pub(crate) subtitle_language: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

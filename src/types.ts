@@ -257,6 +257,18 @@ export type PlaybackState = {
   videoReady: boolean;
 };
 
+export type PlaybackPreferenceInput = {
+  itemId: string;
+  seriesId?: string | null;
+  mediaSourceId?: string | null;
+  audioStreamIndex?: number | null;
+  audioLanguage?: string | null;
+  subtitleStreamIndex?: number | null;
+  subtitleLanguage?: string | null;
+};
+
+export type PlaybackPreference = Omit<PlaybackPreferenceInput, "itemId" | "seriesId">;
+
 export type ServerForm = {
   serverType: "emby" | "jellyfin";
   name: string;

@@ -3,9 +3,10 @@ use crate::models::{
     normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
     HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryInput, LibraryLatestPayload,
     LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary, PlayResult,
-    PlaybackControlInput, PlaybackStateInput, PlaybackStateResult, ReportPlaybackProgressInput,
-    ReportPlaybackStartInput, ReportPlaybackStoppedInput, SaveServerInput, SaveSettingsInput,
-    SavedServer, SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
+    PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
+    ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
+    SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
+    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
 };
 use crate::mpv;
 use crate::store;
@@ -584,6 +585,43 @@ pub(crate) async fn playback_state(
     tauri::async_runtime::spawn_blocking(move || mpv::state(&input.play_session_id))
         .await
         .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn save_playback_preference(
+    app: AppHandle,
+    input: SavePlaybackPreferenceInput,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let server = store::active_server(&app)?;
+        let key = store::playback_preference_key(input.series_id.as_deref(), &input.item_id);
+        store::save_playback_preference(
+            &app,
+            &server.id,
+            key,
+            PlaybackPreference {
+                media_source_id: input.media_source_id,
+                audio_stream_index: input.audio_stream_index,
+                audio_language: input.audio_language,
+                subtitle_stream_index: input.subtitle_stream_index,
+                subtitle_language: input.subtitle_language,
+            },
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn load_playback_preferences(
+    app: AppHandle,
+) -> Result<std::collections::HashMap<String, PlaybackPreference>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let server = store::active_server(&app)?;
+        store::playback_preferences(&app, &server.id)
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

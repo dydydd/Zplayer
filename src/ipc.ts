@@ -11,6 +11,8 @@ import type {
   LibrarySortOrder,
   LoginResult,
   PlaybackCommand,
+  PlaybackPreference,
+  PlaybackPreferenceInput,
   PlaybackState,
   PlayResult,
   SavedServer,
@@ -45,6 +47,8 @@ export const ipc = {
     invoke<PlayResult>("play_item", { input: { itemId, mediaSourceId, audioStreamIndex, subtitleStreamIndex, subtitleStreamPosition } }),
   controlPlayback: (playSessionId: string, command: PlaybackCommand) =>
     invoke("control_playback", { input: { playSessionId, command } }),
+  savePlaybackPreference: (input: PlaybackPreferenceInput) => invoke<void>("save_playback_preference", { input }),
+  loadPlaybackPreferences: () => invoke<Record<string, PlaybackPreference>>("load_playback_preferences"),
   markFavorite: (itemId: string, value: boolean) => invoke<void>("mark_favorite", { input: { itemId, value } }),
   markPlayed: (itemId: string, value: boolean) => invoke<void>("mark_played", { input: { itemId, value } }),
   fetchServerName: (input: Pick<ServerForm, "url" | "serverType" | "useSystemProxy">) =>
