@@ -375,6 +375,7 @@
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-top: 22px;
@@ -501,7 +502,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-width: 920px;
+  max-width: min(760px, 100%);
   margin-top: 16px;
 }
 

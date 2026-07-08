@@ -195,7 +195,7 @@
 
 .poster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 34px 30px;
   animation: page-enter 0.18s var(--tv-ease) both;
 }
@@ -209,13 +209,13 @@
 
 .library-page .poster-grid,
 .search-page .poster-grid {
-  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   align-items: start;
 }
 
 .library-page .poster-density-compact,
 .search-page .poster-density-compact {
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 26px 20px;
 }
 

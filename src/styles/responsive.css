@@ -137,6 +137,21 @@
   }
 }
 
+@media (max-width: 720px) {
+  .player-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .player-main-actions {
+    gap: 10px;
+  }
+
+  .player-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   :root {
     --page-pad: 16px;
@@ -384,7 +399,7 @@
   }
 
   .player-option-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
