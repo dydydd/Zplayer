@@ -37,7 +37,7 @@ env:
 jobs:
   validate:
     name: Validate
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
     name: Prepare release
     needs: validate
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       ref: ${{ steps.ref.outputs.ref }}
       version: ${{ steps.version.outputs.version }}
@@ -120,7 +120,7 @@ jobs:
   build-linux:
     name: Build Linux
     needs: prepare-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -244,13 +244,72 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
 
+  build-macos:
+    name: Build macOS
+    needs: prepare-release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Stamp app version
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const version = process.env.RELEASE_VERSION;
+
+          for (const file of ["package.json", "package-lock.json"]) {
+            if (!fs.existsSync(file)) continue;
+            const json = JSON.parse(fs.readFileSync(file, "utf8"));
+            json.version = version;
+            if (json.packages?.[""]) json.packages[""].version = version;
+            fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+          }
+
+          const tauriPath = "src-tauri/tauri.conf.json";
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, "utf8"));
+          tauri.version = version;
+          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + "\n");
+
+          const cargoPath = "src-tauri/Cargo.toml";
+          const cargo = fs.readFileSync(cargoPath, "utf8").replace(/^version = ".*"$/m, `version = "${version}"`);
+          fs.writeFileSync(cargoPath, cargo);
+          NODE
+
+      - name: Build Tauri bundles
+        run: npm run tauri -- build
+
+      - name: Upload macOS bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: zplayer-macos
+          if-no-files-found: error
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+
   publish-release:
     name: Publish release
     needs:
       - prepare-release
       - build-linux
       - build-windows
-    runs-on: ubuntu-22.04
+      - build-macos
+    runs-on: ubuntu-latest
     steps:
       - name: Download bundles
         uses: actions/download-artifact@v4
@@ -263,7 +322,7 @@ jobs:
         with:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: Zplayer v${{ needs.prepare-release.outputs.version }}
-          body: "Windows and Linux builds are attached below."
+          body: "Windows, Linux, and macOS builds are attached below."
           files: artifacts/*
           overwrite_files: true
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft == 'true' }}
