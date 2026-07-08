@@ -108,14 +108,10 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             exit 0
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "$tag already exists; reusing it"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "$tag"
-          git push origin "$tag"
+          git tag -f "$tag"
+          git push --force origin "refs/tags/$tag"
 
   build-linux:
     name: Build Linux
@@ -323,7 +319,7 @@ jobs:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: Zplayer v${{ needs.prepare-release.outputs.version }}
           body: "Windows, Linux, and macOS builds are attached below."
-          files: artifacts/*
+          files: artifacts/**/*
           overwrite_files: true
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft == 'true' }}
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease == 'true' }}
