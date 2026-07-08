@@ -1,6 +1,13 @@
 name: Release
 
 on:
+  workflow_run:
+    workflows:
+      - Check
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       draft:
@@ -32,10 +39,13 @@ env:
 jobs:
   preflight:
     name: Preflight
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -60,9 +70,47 @@ jobs:
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
+  prepare:
+    name: Prepare release
+    needs: preflight
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Set date version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(node -e "const f=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',year:'2-digit',month:'numeric',day:'numeric'});const p=Object.fromEntries(f.formatToParts(new Date()).map(x=>[x.type,x.value]));console.log([Number(p.year),Number(p.month),Number(p.day)].join('.'))")"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create release tag
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$tag"
+          git push origin "$tag"
+
   publish:
     name: Publish ${{ matrix.platform }}
-    needs: preflight
+    needs: prepare
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -74,6 +122,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -93,20 +143,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Set date version
-        id: version
-        shell: bash
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version="$(node -e "const f=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',year:'2-digit',month:'numeric',day:'numeric'});const p=Object.fromEntries(f.formatToParts(new Date()).map(x=>[x.type,x.value]));console.log([Number(p.year),Number(p.month),Number(p.day)].join('.'))")"
-          fi
-          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Stamp app version
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           node - <<'NODE'
           const fs = require("fs");
@@ -136,8 +176,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npm run tauri
-          tagName: v${{ steps.version.outputs.version }}
-          releaseName: Zplayer v${{ steps.version.outputs.version }}
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: Zplayer v${{ needs.prepare.outputs.version }}
           releaseBody: "Windows and Linux builds are attached below."
           releaseDraft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
