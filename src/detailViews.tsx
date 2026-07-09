@@ -1,9 +1,11 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import { ipc } from "./ipc";
 import i18n from "./i18n";
 import type { ItemDetailPayload, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
 import { bg, episodeLabel, runtimeLabel } from "./media";
+import { subtitleDialogFilters } from "./subtitleDialog";
 import { formatTime, mediaVersionFacts } from "./viewLogic";
 import { Image, Poster, ScrollableStage, useFloatingBackVisible } from "./viewParts";
 
@@ -40,6 +42,7 @@ export function DetailView({
   onError,
   onOpenGenre,
   onOpenPerson,
+  onOpenCollection,
 }: {
   payload: ItemDetailPayload;
   entryItemId: string;
@@ -50,6 +53,7 @@ export function DetailView({
   onError: (message: string) => void;
   onOpenGenre: (genre: string) => void;
   onOpenPerson: (personId: string, name: string) => void;
+  onOpenCollection: (collectionId: string, title: string) => void;
 }) {
   const { t } = useTranslation();
   const item = payload.item;
@@ -89,6 +93,7 @@ export function DetailView({
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
   const currentSeason = payload.seasons.find((season) => season.id === seasonId);
   const runtime = runtimeLabel(item.runTimeTicks);
+  const collectionLike = item.itemType === "BoxSet" || item.itemType === "CollectionFolder";
 
   useEffect(() => {
     mediaSourcesByItemRef.current = mediaSourcesByItem;
@@ -213,6 +218,11 @@ export function DetailView({
               <SvgIcon name="check" />
               <span>{item.played ? t("detail.watched") : t("detail.markWatched")}</span>
             </button>
+            {collectionLike && (
+              <button className="mark-text" onClick={() => onOpenCollection(item.id, item.name)}>
+                <span>{t("detail.openCollection")}</span>
+              </button>
+            )}
           </div>
           {selectedSource && (
             <div className="hero-option-row">
@@ -441,6 +451,7 @@ export function PlayerView({
   onToggleFullscreen,
   onClose,
   onCommand,
+  onError,
   canPlayPrevious,
   canPlayNext,
   onPlayPrevious,
@@ -462,6 +473,7 @@ export function PlayerView({
   onToggleFullscreen: () => void;
   onClose: () => void;
   onCommand: (command: PlaybackCommand) => Promise<void>;
+  onError: (message: string) => void;
   canPlayPrevious: boolean;
   canPlayNext: boolean;
   onPlayPrevious: () => Promise<void>;
@@ -577,6 +589,18 @@ export function PlayerView({
     return () => window.clearTimeout(hideTimer.current);
   }, [menu]);
 
+  async function chooseExternalSubtitle() {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: subtitleDialogFilters,
+      });
+      if (typeof selected === "string") setExternalSubtitle(selected);
+    } catch (err) {
+      onError(String(err));
+    }
+  }
+
   return (
     <div className={`player-page ${ready ? "ready" : ""} ${visible || menu ? "" : "controls-hidden"}`} onMouseMove={showControls} onPointerDown={showControls}>
       <div className="player-drag-region" data-tauri-drag-region />
@@ -664,6 +688,7 @@ export function PlayerView({
             if (target) void onCommand(`external_subtitle:${target}`);
           }}>
             <input value={externalSubtitle} onChange={(event) => setExternalSubtitle(event.currentTarget.value)} aria-label={t("player.subtitlePath")} />
+            <button type="button" onClick={() => void chooseExternalSubtitle()}>{t("player.chooseSubtitle")}</button>
             <button>{t("player.loadSubtitle")}</button>
           </form>
         </div>

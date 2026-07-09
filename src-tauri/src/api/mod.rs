@@ -335,10 +335,7 @@ pub(crate) fn get_media_versions(
                 .find(|stream| stream.stream_type.as_deref() == Some("Audio"));
             MediaVersion {
                 id,
-                name: source
-                    .name
-                    .or(source.container.clone())
-                    .unwrap_or_else(|| format!("鐗堟湰 {}", index + 1)),
+                name: media_version_name(source.name, source.container.clone(), index),
                 container: source.container,
                 path: source.path,
                 protocol: source.protocol,
@@ -396,6 +393,11 @@ pub(crate) fn get_media_versions(
             }
         })
         .collect())
+}
+
+fn media_version_name(name: Option<String>, container: Option<String>, index: usize) -> String {
+    name.or(container)
+        .unwrap_or_else(|| format!("Version {}", index + 1))
 }
 
 pub(crate) fn art_urls(server: &SavedServer, item: &ApiItem) -> Vec<MediaArt> {
@@ -1130,6 +1132,16 @@ mod tests {
     #[test]
     fn rejects_url_without_scheme() {
         assert!(normalize_server_url("127.0.0.1:8096").is_err());
+    }
+
+    #[test]
+    fn media_version_fallback_name_is_readable() {
+        assert_eq!(media_version_name(None, None, 1), "Version 2");
+        assert_eq!(
+            media_version_name(Some("Director Cut".to_string()), Some("mkv".to_string()), 0),
+            "Director Cut"
+        );
+        assert_eq!(media_version_name(None, Some("mp4".to_string()), 0), "mp4");
     }
 
     #[test]

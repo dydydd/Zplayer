@@ -171,6 +171,13 @@ export function HomeView({
             showProgress
           />
           <MediaShelf
+            title={t("home.favorites")}
+            items={home?.favoriteItems ?? []}
+            onOpenItem={onOpenItem}
+            className="hero-shelf"
+            showProgress
+          />
+          <MediaShelf
             title={t("home.recentPlayed")}
             items={home?.recentItems ?? []}
             onOpenItem={onOpenItem}

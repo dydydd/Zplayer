@@ -13,6 +13,7 @@ pub(crate) struct HomePayload {
     pub(crate) recommended_movies: Vec<MediaItem>,
     pub(crate) recommended_shows: Vec<MediaItem>,
     pub(crate) resume_items: Vec<MediaItem>,
+    pub(crate) favorite_items: Vec<MediaItem>,
     pub(crate) recent_items: Vec<MediaItem>,
 }
 
@@ -23,6 +24,7 @@ pub(crate) struct HomeMorePayload {
     pub(crate) library_latest: Vec<LibraryLatestPayload>,
     pub(crate) recommended_movies: Vec<MediaItem>,
     pub(crate) recommended_shows: Vec<MediaItem>,
+    pub(crate) favorite_items: Vec<MediaItem>,
     pub(crate) recent_items: Vec<MediaItem>,
 }
 

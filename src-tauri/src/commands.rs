@@ -191,6 +191,7 @@ fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
         recommended_movies: Vec::new(),
         recommended_shows: Vec::new(),
         resume_items,
+        favorite_items: Vec::new(),
         recent_items: Vec::new(),
     })
 }
@@ -207,12 +208,13 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
     let client = api::http_client(server.use_system_proxy)?;
     let libraries = api::fetch_libraries(&client, &server)?;
     let app_for_recent = app.clone();
-    let (library_latest, recommended_movies, recommended_shows, recent_items) =
+    let (library_latest, recommended_movies, recommended_shows, favorite_items, recent_items) =
         thread::scope(|scope| {
             let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
             let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
             let recommended_shows =
                 scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
+            let favorite_items = scope.spawn(|| load_favorite_items(&client, &server));
             let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
 
             (
@@ -227,6 +229,11 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
                     .ok()
                     .and_then(Result::ok)
                     .unwrap_or_default(),
+                favorite_items
+                    .join()
+                    .ok()
+                    .and_then(Result::ok)
+                    .unwrap_or_default(),
                 recent_items.join().unwrap_or_default(),
             )
         });
@@ -236,6 +243,7 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
         library_latest,
         recommended_movies,
         recommended_shows,
+        favorite_items,
         recent_items,
     })
 }
@@ -288,6 +296,29 @@ fn load_recommended_movies(
             ("enableImageTypes", api::image_types()),
         ],
     )
+}
+
+fn load_favorite_items(
+    client: &reqwest::blocking::Client,
+    server: &SavedServer,
+) -> Result<Vec<crate::models::MediaItem>, String> {
+    api::get_library_items(
+        client,
+        server,
+        api::LibraryItemsQuery {
+            library_id: "",
+            start_index: 0,
+            limit: 16,
+            item_type: None,
+            sort_by: "DateCreated",
+            sort_order: "Descending",
+            filters: &api::LibraryQueryFilters {
+                favorite: Some(true),
+                ..Default::default()
+            },
+        },
+    )
+    .map(|(items, _)| items)
 }
 
 fn load_recent_items(
@@ -367,7 +398,7 @@ fn load_library_sync(app: AppHandle, input: LibraryInput) -> Result<LibraryPaylo
             let library = if input.library_id.is_empty() {
                 MediaLibrary {
                     id: input.library_id.clone(),
-                    name: "收藏".to_string(),
+                    name: "Favorites".to_string(),
                     collection_type: None,
                     image_url: None,
                 }

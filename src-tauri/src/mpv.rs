@@ -248,10 +248,17 @@ fn normalize_command(command: &str) -> Result<String, String> {
             if target.is_empty() {
                 return Err("Invalid external subtitle.".to_string());
             }
+            if !is_remote_subtitle(target) && !Path::new(target).is_file() {
+                return Err("External subtitle was not found.".to_string());
+            }
             Ok(format!("external_subtitle:{target}"))
         }
         _ => Err("Unknown playback command.".to_string()),
     }
+}
+
+fn is_remote_subtitle(target: &str) -> bool {
+    target.starts_with("http://") || target.starts_with("https://")
 }
 
 pub(crate) fn forget_control(play_session_id: &str) {
@@ -909,9 +916,10 @@ mod tests {
             "subtitle_delay_set:0.500"
         );
         assert_eq!(
-            normalize_command("external_subtitle:C:/subs/movie.srt").unwrap(),
-            "external_subtitle:C:/subs/movie.srt"
+            normalize_command("external_subtitle:https://example.test/movie.srt").unwrap(),
+            "external_subtitle:https://example.test/movie.srt"
         );
+        assert!(normalize_command("external_subtitle:/definitely/missing/movie.srt").is_err());
     }
 
     #[test]

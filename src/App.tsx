@@ -11,7 +11,7 @@ import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
 import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
-import { episodePlaybackContext, findKnownItem, libraryKey, playbackPreferenceKey, preferencePayload, preferredStreamIndex, relativeEpisodeId } from "./appLogic";
+import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, playbackPreferenceKey, preferencePayload, preferredStreamIndex, relativeEpisodeId } from "./appLogic";
 import "./App.css";
 
 type HistoryEntry = {
@@ -509,7 +509,7 @@ function App() {
     const cached = resolvedSettings.metadataCacheEnabled && activeServerId ? homeCache.current.get(activeServerId) : null;
     if (cached) {
       setHome(cached);
-      if (!cached.libraryLatest.length && !cached.recommendedMovies.length && !cached.recommendedShows.length) {
+      if (!cached.libraryLatest.length && !cached.recommendedMovies.length && !cached.recommendedShows.length && !cached.favoriteItems.length) {
         const currentRequest = ++requestId.current;
         void loadHomeMore(cached.server.id, currentRequest);
       }
@@ -535,6 +535,7 @@ function App() {
           libraryLatest: more.libraryLatest,
           recommendedMovies: more.recommendedMovies,
           recommendedShows: more.recommendedShows,
+          favoriteItems: more.favoriteItems,
           recentItems: more.recentItems,
         };
         if (resolvedSettings.metadataCacheEnabled) homeCache.current.set(more.serverId, next);
@@ -1019,6 +1020,10 @@ function App() {
       filters: { personId },
     });
   }, [openView]);
+  const openCollection = useCallback((collectionId: string, title: string) => {
+    setLibrary(null);
+    openView(collectionLibraryView(collectionId, title));
+  }, [openView]);
   const openDetail = useCallback((id: string) => openView({ name: "detail", id }), [openView]);
 
   function rememberSearchTerm(query: string) {
@@ -1154,6 +1159,7 @@ function App() {
             onError={setError}
             onOpenGenre={openGenre}
             onOpenPerson={openPerson}
+            onOpenCollection={openCollection}
           />
         )}
         {showContent && view.name === "detail" && !detailMatchesView && <LoadingPage />}
@@ -1168,6 +1174,7 @@ function App() {
             onToggleFullscreen={() => void toggleFullscreen()}
             onClose={() => void getCurrentWindow().close()}
             onCommand={(command) => controlPlayback(view.playSessionId, command)}
+            onError={setError}
             canPlayPrevious={!!relativeEpisodeId(episodeContextFromView(view), -1)}
             canPlayNext={!!relativeEpisodeId(episodeContextFromView(view), 1)}
             onPlayPrevious={() => playRelativeEpisode(-1)}

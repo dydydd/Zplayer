@@ -1,7 +1,16 @@
-import type { HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem, MediaVersion } from "./types";
+import type { HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, MediaItem, MediaVersion, View } from "./types";
 
 export function libraryKey(libraryId: string, itemType: LibraryItemType, sortBy: LibrarySortBy, sortOrder: LibrarySortOrder, filters: LibraryFilters = {}) {
   return `${libraryId}:${itemType}:${sortBy}:${sortOrder}:${JSON.stringify(filters)}`;
+}
+
+export function collectionLibraryView(collectionId: string, title: string): View {
+  return {
+    name: "library",
+    id: "",
+    title,
+    filters: { collectionId },
+  };
 }
 
 export function findKnownItem(
@@ -15,6 +24,7 @@ export function findKnownItem(
     ...(home?.recommendedMovies ?? []),
     ...(home?.recommendedShows ?? []),
     ...(home?.resumeItems ?? []),
+    ...(home?.favoriteItems ?? []),
     ...(home?.recentItems ?? []),
     ...(library?.items ?? []),
     ...(detail?.episodes ?? []),
