@@ -144,6 +144,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Remove Windows mpv binaries
+        run: find mpv -type f \( -name '*.dll' -o -name '*.exe' -o -name '*.com' -o -name '*.bat' \) -delete
+
       - name: Stamp app version
         env:
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -266,6 +269,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Remove Windows mpv binaries
+        run: find mpv -type f \( -name '*.dll' -o -name '*.exe' -o -name '*.com' -o -name '*.bat' \) -delete
+
       - name: Stamp app version
         env:
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -344,6 +350,10 @@ jobs:
             if [ -n "$previous" ]; then
               echo "**Full Changelog**: https://github.com/${REPOSITORY}/compare/${previous}...${tag}"
             fi
+            echo
+            echo "## Runtime Dependencies"
+            echo
+            echo "Windows builds include mpv. Linux and macOS builds use the system mpv; install it with \`sudo apt install mpv\` on Debian/Ubuntu or \`brew install mpv\` on macOS, or set a custom mpv path in settings."
           } > release-notes.md
 
       - name: Create release

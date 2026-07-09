@@ -797,7 +797,7 @@ fn mpv_not_found_message() -> String {
 
     #[cfg(not(target_os = "windows"))]
     {
-        "mpv was not found. Install mpv or set the mpv path in settings.".to_string()
+        "mpv was not found. Install mpv with `brew install mpv` on macOS, `sudo apt install mpv` on Debian/Ubuntu, or set the mpv path in settings.".to_string()
     }
 }
 
@@ -1083,6 +1083,16 @@ mod tests {
 
         #[cfg(not(target_os = "windows"))]
         assert_eq!(default_mpv_executable_name(), "mpv");
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn non_windows_mpv_not_found_message_mentions_install_options() {
+        let message = mpv_not_found_message();
+
+        assert!(message.contains("brew install mpv"));
+        assert!(message.contains("sudo apt install mpv"));
+        assert!(message.contains("set the mpv path in settings"));
     }
 
     #[cfg(not(target_os = "windows"))]
