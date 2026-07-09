@@ -173,8 +173,20 @@ jobs:
           fs.writeFileSync(cargoPath, cargo);
           NODE
 
-      - name: Build Tauri bundles
-        run: npm run tauri -- build
+      - name: Build Linux deb and rpm bundles
+        run: npm run tauri -- build --bundles deb,rpm
+
+      - name: Build Linux AppImage bundle
+        run: |
+          for attempt in 1 2 3; do
+            if npm run tauri -- build --bundles appimage; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 30))
+          done
 
       - name: Upload Linux bundles
         uses: actions/upload-artifact@v4
