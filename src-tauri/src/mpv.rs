@@ -41,7 +41,10 @@ struct MpvEventEndFile {
 static SESSIONS: OnceLock<Mutex<HashMap<String, Arc<MpvSession>>>> = OnceLock::new();
 static PROGRESS_STATES: OnceLock<Mutex<HashMap<String, PlaybackStateResult>>> = OnceLock::new();
 static EXPLICIT_STOPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-static API_CACHE: OnceLock<Mutex<HashMap<PathBuf, Result<Arc<MpvApi>, String>>>> = OnceLock::new();
+type ApiLoadResult = Result<Arc<MpvApi>, String>;
+type ApiCache = Mutex<HashMap<PathBuf, ApiLoadResult>>;
+
+static API_CACHE: OnceLock<ApiCache> = OnceLock::new();
 
 const MPV_FORMAT_FLAG: c_int = 3;
 const MPV_FORMAT_INT64: c_int = 4;
@@ -73,6 +76,15 @@ pub(crate) struct LaunchRequest<'a> {
     pub(crate) subtitle_track_position: Option<i32>,
     pub(crate) subtitle_url: Option<&'a str>,
     pub(crate) start_position_ticks: Option<i64>,
+}
+
+struct SessionConfig<'a> {
+    settings: &'a AppSettings,
+    server: &'a SavedServer,
+    log_path: &'a Path,
+    subtitle_track_position: Option<i32>,
+    subtitle_url: Option<&'a str>,
+    start_position_ticks: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -395,12 +407,14 @@ pub(crate) fn launch(
     configure_session(
         app,
         &session,
-        &settings,
-        server,
-        &log_path,
-        subtitle_track_position,
-        subtitle_url,
-        start_position_ticks,
+        SessionConfig {
+            settings: &settings,
+            server,
+            log_path: &log_path,
+            subtitle_track_position,
+            subtitle_url,
+            start_position_ticks,
+        },
     )?;
     session.initialize()?;
     session.command(&["loadfile", stream_url, "replace"])?;
@@ -425,22 +439,17 @@ pub(crate) fn launch(
 fn configure_session(
     app: &AppHandle,
     session: &MpvSession,
-    settings: &AppSettings,
-    server: &SavedServer,
-    log_path: &Path,
-    subtitle_track_position: Option<i32>,
-    subtitle_url: Option<&str>,
-    start_position_ticks: Option<i64>,
+    config: SessionConfig<'_>,
 ) -> Result<(), String> {
     session.set_option("config", "yes")?;
     if let Some(config_dir) = find_libmpv_config_dir(app) {
         session.set_option("config-dir", &config_dir.display().to_string())?;
     }
-    session.set_option("log-file", &log_path.display().to_string())?;
+    session.set_option("log-file", &config.log_path.display().to_string())?;
     session.set_option("msg-level", MPV_LOG_LEVEL)?;
     session.set_option(
         "http-header-fields",
-        &format!("X-Emby-Token: {}", server.access_token),
+        &format!("X-Emby-Token: {}", config.server.access_token),
     )?;
     for (name, value) in DISABLE_MPV_UI_OPTIONS {
         session.set_option(name, value)?;
@@ -451,13 +460,17 @@ fn configure_session(
     for (name, value) in MPV_SYNC_START_OPTIONS {
         session.set_option(name, value)?;
     }
-    for (name, value) in mpv_settings_options(settings) {
+    for (name, value) in mpv_settings_options(config.settings) {
         session.set_option(&name, &value)?;
     }
-    for (name, value) in mpv_subtitle_options(settings, subtitle_track_position, subtitle_url) {
+    for (name, value) in mpv_subtitle_options(
+        config.settings,
+        config.subtitle_track_position,
+        config.subtitle_url,
+    ) {
         session.set_option(&name, &value)?;
     }
-    if let Some(start) = mpv_start_value(start_position_ticks) {
+    if let Some(start) = mpv_start_value(config.start_position_ticks) {
         session.set_option("start", &start)?;
     }
     add_embed_options(app, session)?;
@@ -1306,9 +1319,7 @@ mod tests {
 
     #[test]
     fn runs_libmpv_as_playback_engine() {
-        for expected in [("keep-open", "no")] {
-            assert!(MPV_ENGINE_OPTIONS.contains(&expected));
-        }
+        assert!(MPV_ENGINE_OPTIONS.contains(&("keep-open", "no")));
     }
 
     #[test]
