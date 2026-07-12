@@ -170,20 +170,6 @@ export function HomeView({
             className="hero-shelf"
             showProgress
           />
-          <MediaShelf
-            title={t("home.favorites")}
-            items={home?.favoriteItems ?? []}
-            onOpenItem={onOpenItem}
-            className="hero-shelf"
-            showProgress
-          />
-          <MediaShelf
-            title={t("home.recentPlayed")}
-            items={home?.recentItems ?? []}
-            onOpenItem={onOpenItem}
-            className="hero-shelf"
-            showProgress
-          />
       </section>
       {home && !home.resumeItems.length && !home.libraries.length && !home.libraryLatest.length && (
         <EmptyState title={t("home.noMedia")} onAction={onOpenServers} actionLabel={t("home.serverManage")} />
