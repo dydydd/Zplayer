@@ -1,49 +1,68 @@
 use crate::models::{AppSettings, PlayResult, PlaybackStateResult, SavedServer};
 use crate::store;
+use libloading::Library;
 use std::collections::{HashMap, HashSet};
+use std::ffi::{CStr, CString};
 use std::fs;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use std::os::raw::{c_char, c_double, c_int, c_void};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
-#[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
-static CONTROL_PATHS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
-static PROGRESS_PATHS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
+type MpvCreate = unsafe extern "C" fn() -> *mut c_void;
+type MpvInitialize = unsafe extern "C" fn(*mut c_void) -> c_int;
+type MpvTerminateDestroy = unsafe extern "C" fn(*mut c_void);
+type MpvCommand = unsafe extern "C" fn(*mut c_void, *const *const c_char) -> c_int;
+type MpvSetOptionString = unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int;
+type MpvGetProperty = unsafe extern "C" fn(*mut c_void, *const c_char, c_int, *mut c_void) -> c_int;
+type MpvWaitEvent = unsafe extern "C" fn(*mut c_void, c_double) -> *mut MpvEvent;
+type MpvErrorString = unsafe extern "C" fn(c_int) -> *const c_char;
+
+#[repr(C)]
+struct MpvEvent {
+    event_id: c_int,
+    error: c_int,
+    reply_userdata: u64,
+    data: *mut c_void,
+}
+
+#[repr(C)]
+struct MpvEventEndFile {
+    reason: c_int,
+    error: c_int,
+    playlist_entry_id: i64,
+    playlist_insert_id: i64,
+    playlist_insert_num_entries: c_int,
+}
+
+static SESSIONS: OnceLock<Mutex<HashMap<String, Arc<MpvSession>>>> = OnceLock::new();
 static PROGRESS_STATES: OnceLock<Mutex<HashMap<String, PlaybackStateResult>>> = OnceLock::new();
-static PROCESS_IDS: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
 static EXPLICIT_STOPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-const DISABLE_MPV_UI_ARGS: &[&str] = &[
-    "--input-default-bindings=no",
-    "--input-vo-keyboard=no",
-    "--osc=no",
-    "--osd-bar=no",
-    "--osd-level=0",
+static API_CACHE: OnceLock<Mutex<HashMap<PathBuf, Result<Arc<MpvApi>, String>>>> = OnceLock::new();
+
+const MPV_FORMAT_FLAG: c_int = 3;
+const MPV_FORMAT_INT64: c_int = 4;
+const MPV_FORMAT_DOUBLE: c_int = 5;
+const MPV_EVENT_NONE: c_int = 0;
+const MPV_EVENT_SHUTDOWN: c_int = 1;
+const MPV_EVENT_END_FILE: c_int = 7;
+const MPV_END_FILE_REASON_ERROR: c_int = 4;
+
+const DISABLE_MPV_UI_OPTIONS: &[(&str, &str)] = &[
+    ("input-default-bindings", "no"),
+    ("input-vo-keyboard", "no"),
+    ("osd-bar", "no"),
+    ("osd-level", "0"),
 ];
-#[cfg(any(test, target_os = "windows"))]
-const EMBED_MPV_WINDOW_ARGS: &[&str] = &["--force-window=yes", "--no-border", "--ontop=no"];
-const MPV_ENGINE_ARGS: &[&str] = &["--no-ytdl", "--keep-open=no"];
-const MPV_SYNC_START_ARGS: &[&str] = &["--pause=yes"];
-const MPV_LOG_LEVEL_ARG: &str = "--msg-level=all=warn";
-const MPV_STARTUP_CHECK_INTERVAL: Duration = Duration::from_millis(25);
-const MPV_STARTUP_CHECK_MAX: Duration = Duration::from_millis(300);
-#[cfg(target_os = "windows")]
-const EMBED_INITIAL_RESTACKS: usize = 40;
-#[cfg(target_os = "windows")]
-const EMBED_INITIAL_RESTACK_DELAY: Duration = Duration::from_millis(25);
-#[cfg(target_os = "windows")]
-const TERMINATE_GRACE_MS: u32 = 700;
+const MPV_ENGINE_OPTIONS: &[(&str, &str)] = &[("keep-open", "no")];
+const MPV_SYNC_START_OPTIONS: &[(&str, &str)] = &[("pause", "yes")];
+const MPV_LOG_LEVEL: &str = "all=warn";
 
 pub(crate) struct Launch {
     pub(crate) result: PlayResult,
-    pub(crate) child: Child,
-    pub(crate) progress_path: PathBuf,
-    pub(crate) control_path: PathBuf,
 }
 
 pub(crate) struct LaunchRequest<'a> {
@@ -54,6 +73,298 @@ pub(crate) struct LaunchRequest<'a> {
     pub(crate) subtitle_track_position: Option<i32>,
     pub(crate) subtitle_url: Option<&'a str>,
     pub(crate) start_position_ticks: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PlaybackEnd {
+    pub(crate) failed: bool,
+}
+
+struct MpvApi {
+    _library: Library,
+    mpv_create: MpvCreate,
+    mpv_initialize: MpvInitialize,
+    mpv_terminate_destroy: MpvTerminateDestroy,
+    mpv_command: MpvCommand,
+    mpv_set_option_string: MpvSetOptionString,
+    mpv_get_property: MpvGetProperty,
+    mpv_wait_event: MpvWaitEvent,
+    mpv_error_string: MpvErrorString,
+}
+
+impl MpvApi {
+    unsafe fn load(path: &Path) -> Result<Self, String> {
+        let library = Library::new(path)
+            .map_err(|err| format!("Failed to load libmpv from {}: {err}", path.display()))?;
+        let mpv_create = *library
+            .get::<MpvCreate>(b"mpv_create\0")
+            .map_err(|err| format!("libmpv is missing mpv_create: {err}"))?;
+        let mpv_initialize = *library
+            .get::<MpvInitialize>(b"mpv_initialize\0")
+            .map_err(|err| format!("libmpv is missing mpv_initialize: {err}"))?;
+        let mpv_terminate_destroy = *library
+            .get::<MpvTerminateDestroy>(b"mpv_terminate_destroy\0")
+            .map_err(|err| format!("libmpv is missing mpv_terminate_destroy: {err}"))?;
+        let mpv_command = *library
+            .get::<MpvCommand>(b"mpv_command\0")
+            .map_err(|err| format!("libmpv is missing mpv_command: {err}"))?;
+        let mpv_set_option_string = *library
+            .get::<MpvSetOptionString>(b"mpv_set_option_string\0")
+            .map_err(|err| format!("libmpv is missing mpv_set_option_string: {err}"))?;
+        let mpv_get_property = *library
+            .get::<MpvGetProperty>(b"mpv_get_property\0")
+            .map_err(|err| format!("libmpv is missing mpv_get_property: {err}"))?;
+        let mpv_wait_event = *library
+            .get::<MpvWaitEvent>(b"mpv_wait_event\0")
+            .map_err(|err| format!("libmpv is missing mpv_wait_event: {err}"))?;
+        let mpv_error_string = *library
+            .get::<MpvErrorString>(b"mpv_error_string\0")
+            .map_err(|err| format!("libmpv is missing mpv_error_string: {err}"))?;
+
+        Ok(Self {
+            _library: library,
+            mpv_create,
+            mpv_initialize,
+            mpv_terminate_destroy,
+            mpv_command,
+            mpv_set_option_string,
+            mpv_get_property,
+            mpv_wait_event,
+            mpv_error_string,
+        })
+    }
+
+    fn error_message(&self, code: c_int) -> String {
+        unsafe {
+            let message = (self.mpv_error_string)(code);
+            if message.is_null() {
+                format!("libmpv error {code}")
+            } else {
+                CStr::from_ptr(message).to_string_lossy().into_owned()
+            }
+        }
+    }
+}
+
+struct MpvSession {
+    api: Arc<MpvApi>,
+    handle: *mut c_void,
+    destroyed: AtomicBool,
+    calls: Mutex<()>,
+    seek_back_seconds: i32,
+    seek_forward_seconds: i32,
+}
+
+unsafe impl Send for MpvSession {}
+unsafe impl Sync for MpvSession {}
+
+impl MpvSession {
+    fn create(
+        api: Arc<MpvApi>,
+        seek_back_seconds: i32,
+        seek_forward_seconds: i32,
+    ) -> Result<Self, String> {
+        let handle = unsafe { (api.mpv_create)() };
+        if handle.is_null() {
+            return Err("Failed to create libmpv handle.".to_string());
+        }
+
+        Ok(Self {
+            api,
+            handle,
+            destroyed: AtomicBool::new(false),
+            calls: Mutex::new(()),
+            seek_back_seconds,
+            seek_forward_seconds,
+        })
+    }
+
+    fn set_option(&self, name: &str, value: &str) -> Result<(), String> {
+        let option_name = name.to_string();
+        let name = c_string(name, "Invalid libmpv option name")?;
+        let value = c_string(value, "Invalid libmpv option value")?;
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+        let status =
+            unsafe { (self.api.mpv_set_option_string)(self.handle, name.as_ptr(), value.as_ptr()) };
+        self.status(
+            status,
+            &format!("Failed to set libmpv option `{option_name}`"),
+        )
+    }
+
+    fn initialize(&self) -> Result<(), String> {
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+        let status = unsafe { (self.api.mpv_initialize)(self.handle) };
+        self.status(status, "Failed to initialize libmpv")
+    }
+
+    fn command(&self, args: &[&str]) -> Result<(), String> {
+        let cstrings = args
+            .iter()
+            .map(|arg| c_string(arg, "Invalid libmpv command argument"))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut pointers = cstrings
+            .iter()
+            .map(|arg| arg.as_ptr())
+            .collect::<Vec<*const c_char>>();
+        pointers.push(ptr::null());
+
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+        let status = unsafe { (self.api.mpv_command)(self.handle, pointers.as_ptr()) };
+        self.status(status, "Failed to send libmpv command")
+    }
+
+    fn state(&self) -> Result<PlaybackStateResult, String> {
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+
+        let time_pos = self.get_double_locked("time-pos");
+        let duration = self.get_double_locked("duration");
+        let paused = self.get_flag_locked("pause").unwrap_or(false);
+        let muted = self.get_flag_locked("mute").unwrap_or(false);
+        let volume = self
+            .get_double_locked("volume")
+            .map(|volume| volume.round().clamp(0.0, 100.0) as i32);
+        let speed = self.get_double_locked("speed");
+        let video_ready = self
+            .get_i64_locked("dwidth")
+            .zip(self.get_i64_locked("dheight"))
+            .map(|(width, height)| width > 0 && height > 0)
+            .unwrap_or(false);
+
+        Ok(PlaybackStateResult {
+            time_pos,
+            duration,
+            paused,
+            muted,
+            volume,
+            speed,
+            video_ready,
+        })
+    }
+
+    fn poll_end(&self, timeout_seconds: f64) -> Result<Option<PlaybackEnd>, String> {
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+
+        let mut timeout = timeout_seconds.max(0.0);
+        loop {
+            let event = unsafe { (self.api.mpv_wait_event)(self.handle, timeout) };
+            if event.is_null() {
+                return Ok(None);
+            }
+            let event = unsafe { &*event };
+            match event.event_id {
+                MPV_EVENT_NONE => return Ok(None),
+                MPV_EVENT_SHUTDOWN => return Ok(Some(PlaybackEnd { failed: false })),
+                MPV_EVENT_END_FILE => {
+                    let failed = if event.data.is_null() {
+                        event.error < 0
+                    } else {
+                        let end_file = unsafe { &*(event.data as *const MpvEventEndFile) };
+                        event.error < 0
+                            || end_file.error < 0
+                            || end_file.reason == MPV_END_FILE_REASON_ERROR
+                    };
+                    return Ok(Some(PlaybackEnd { failed }));
+                }
+                _ => timeout = 0.0,
+            }
+        }
+    }
+
+    fn destroy(&self) {
+        let Ok(_guard) = self.calls.lock() else {
+            return;
+        };
+        if !self.destroyed.swap(true, Ordering::SeqCst) {
+            unsafe {
+                (self.api.mpv_terminate_destroy)(self.handle);
+            }
+        }
+    }
+
+    fn ensure_live(&self) -> Result<(), String> {
+        if self.destroyed.load(Ordering::SeqCst) {
+            Err("Playback session is not active.".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn status(&self, status: c_int, context: &str) -> Result<(), String> {
+        if status < 0 {
+            Err(format!("{context}: {}", self.api.error_message(status)))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn get_double_locked(&self, name: &str) -> Option<f64> {
+        let name = CString::new(name).ok()?;
+        let mut value = 0.0;
+        let status = unsafe {
+            (self.api.mpv_get_property)(
+                self.handle,
+                name.as_ptr(),
+                MPV_FORMAT_DOUBLE,
+                &mut value as *mut f64 as *mut c_void,
+            )
+        };
+        (status >= 0).then_some(value)
+    }
+
+    fn get_flag_locked(&self, name: &str) -> Option<bool> {
+        let name = CString::new(name).ok()?;
+        let mut value: c_int = 0;
+        let status = unsafe {
+            (self.api.mpv_get_property)(
+                self.handle,
+                name.as_ptr(),
+                MPV_FORMAT_FLAG,
+                &mut value as *mut c_int as *mut c_void,
+            )
+        };
+        (status >= 0).then_some(value != 0)
+    }
+
+    fn get_i64_locked(&self, name: &str) -> Option<i64> {
+        let name = CString::new(name).ok()?;
+        let mut value: i64 = 0;
+        let status = unsafe {
+            (self.api.mpv_get_property)(
+                self.handle,
+                name.as_ptr(),
+                MPV_FORMAT_INT64,
+                &mut value as *mut i64 as *mut c_void,
+            )
+        };
+        (status >= 0).then_some(value)
+    }
+}
+
+impl Drop for MpvSession {
+    fn drop(&mut self) {
+        self.destroy();
+    }
 }
 
 pub(crate) fn launch(
@@ -72,69 +383,32 @@ pub(crate) fn launch(
     } = request;
     let redacted_url = redact_secret(stream_url, &server.access_token);
     let settings = store::settings(app)?;
-    let mpv_path = find_mpv(app, &settings)?;
+    let libmpv_path = find_libmpv(app, &settings)?;
     let log_path = mpv_log_path(app, item_id)?;
-    let progress_path = mpv_progress_path(app, item_id)?;
-    let control_path = mpv_control_path(app, item_id)?;
-    let script_path = mpv_progress_script_path(
-        app,
-        item_id,
-        &progress_path,
-        &control_path,
+    let api = load_api(&libmpv_path)?;
+    let session = Arc::new(MpvSession::create(
+        api,
         seek_back_seconds(&settings),
         seek_forward_seconds(&settings),
-    )?;
-    let mut command = Command::new(&mpv_path);
-    if let Some(config_dir) = find_mpv_config_dir(app) {
-        command.arg(format!("--config-dir={}", config_dir.display()));
-    }
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-    add_embed_args(app, &mut command)?;
-    command
-        .arg(format!("--log-file={}", log_path.display()))
-        .arg(format!("--script={}", script_path.display()))
-        .arg(MPV_LOG_LEVEL_ARG)
-        .args(MPV_ENGINE_ARGS)
-        .args(MPV_SYNC_START_ARGS)
-        .arg(format!(
-            "--http-header-fields=X-Emby-Token: {}",
-            server.access_token
-        ));
-    for arg in DISABLE_MPV_UI_ARGS {
-        command.arg(arg);
-    }
-    for arg in mpv_settings_args(&settings) {
-        command.arg(arg);
-    }
-    for arg in mpv_subtitle_args(&settings, subtitle_track_position, subtitle_url) {
-        command.arg(arg);
-    }
-    if let Some(arg) = mpv_start_arg(start_position_ticks) {
-        command.arg(arg);
-    }
-    command.arg(stream_url);
+    )?);
 
-    let mut child = command.spawn().map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound
-            && mpv_path == Path::new(default_mpv_executable_name())
-        {
-            mpv_not_found_message()
-        } else {
-            format!("Failed to launch mpv: {err}")
-        }
-    })?;
-    place_embedded_video_behind_webview(app, child.id());
-    if let Some(status) = wait_for_early_exit(app, &mut child)? {
-        let tail = read_log_tail(&log_path)
-            .map(|text| redact_secret(&text, &server.access_token))
-            .unwrap_or_else(|err| format!("Failed to read mpv log: {err}"));
-        return Err(format!(
-            "mpv exited immediately with status {status}. Log: {}\n{}",
-            log_path.display(),
-            tail
-        ));
+    configure_session(
+        app,
+        &session,
+        &settings,
+        server,
+        &log_path,
+        subtitle_track_position,
+        subtitle_url,
+        start_position_ticks,
+    )?;
+    session.initialize()?;
+    session.command(&["loadfile", stream_url, "replace"])?;
+    if let Some(url) = subtitle_url {
+        let _ = session.command(&["sub-add", url, "select"]);
     }
+
+    remember_session(play_session_id.clone(), session);
 
     Ok(Launch {
         result: PlayResult {
@@ -145,44 +419,117 @@ pub(crate) fn launch(
             log_path: log_path.display().to_string(),
             log_tail: read_log_excerpt(&log_path, &server.access_token),
         },
-        child,
-        progress_path,
-        control_path,
     })
 }
 
-fn wait_for_early_exit(
+fn configure_session(
     app: &AppHandle,
-    child: &mut Child,
-) -> Result<Option<std::process::ExitStatus>, String> {
-    let checks =
-        (MPV_STARTUP_CHECK_MAX.as_millis() / MPV_STARTUP_CHECK_INTERVAL.as_millis()).max(1);
-    for _ in 0..checks {
-        place_embedded_video_behind_webview_once(app, child.id());
-        thread::sleep(MPV_STARTUP_CHECK_INTERVAL);
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|err| format!("Failed to inspect mpv status: {err}"))?
-        {
-            return Ok(Some(status));
-        }
+    session: &MpvSession,
+    settings: &AppSettings,
+    server: &SavedServer,
+    log_path: &Path,
+    subtitle_track_position: Option<i32>,
+    subtitle_url: Option<&str>,
+    start_position_ticks: Option<i64>,
+) -> Result<(), String> {
+    session.set_option("config", "yes")?;
+    if let Some(config_dir) = find_libmpv_config_dir(app) {
+        session.set_option("config-dir", &config_dir.display().to_string())?;
     }
-    Ok(None)
+    session.set_option("log-file", &log_path.display().to_string())?;
+    session.set_option("msg-level", MPV_LOG_LEVEL)?;
+    session.set_option(
+        "http-header-fields",
+        &format!("X-Emby-Token: {}", server.access_token),
+    )?;
+    for (name, value) in DISABLE_MPV_UI_OPTIONS {
+        session.set_option(name, value)?;
+    }
+    for (name, value) in MPV_ENGINE_OPTIONS {
+        session.set_option(name, value)?;
+    }
+    for (name, value) in MPV_SYNC_START_OPTIONS {
+        session.set_option(name, value)?;
+    }
+    for (name, value) in mpv_settings_options(settings) {
+        session.set_option(&name, &value)?;
+    }
+    for (name, value) in mpv_subtitle_options(settings, subtitle_track_position, subtitle_url) {
+        session.set_option(&name, &value)?;
+    }
+    if let Some(start) = mpv_start_value(start_position_ticks) {
+        session.set_option("start", &start)?;
+    }
+    add_embed_options(app, session)?;
+    Ok(())
 }
 
 pub(crate) fn control(play_session_id: &str, command: &str) -> Result<(), String> {
-    let path = CONTROL_PATHS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .map_err(|_| "Failed to access playback controls.".to_string())?
-        .get(play_session_id)
-        .cloned()
-        .ok_or_else(|| "Playback session is not active.".to_string())?;
+    let session = active_session(play_session_id)?;
     let command = normalize_command(command)?;
     if command == "stop" {
         remember_explicit_stop(play_session_id);
     }
-    fs::write(path, command).map_err(|err| format!("Failed to send playback command: {err}"))
+    execute_control(&session, &command)
+}
+
+fn execute_control(session: &MpvSession, command: &str) -> Result<(), String> {
+    match command {
+        "toggle_pause" => session.command(&["cycle", "pause"]),
+        "seek_back" => session.command(&[
+            "seek",
+            &format!("-{}", session.seek_back_seconds),
+            "relative+exact",
+        ]),
+        "seek_forward" => session.command(&[
+            "seek",
+            &session.seek_forward_seconds.to_string(),
+            "relative+exact",
+        ]),
+        "volume_down" => session.command(&["add", "volume", "-5"]),
+        "volume_up" => session.command(&["add", "volume", "5"]),
+        "toggle_mute" => session.command(&["cycle", "mute"]),
+        "audio_next" => session.command(&["cycle", "audio"]),
+        "subtitle_next" => session.command(&["cycle", "sub"]),
+        "speed_down" => session.command(&["add", "speed", "-0.1"]),
+        "speed_up" => session.command(&["add", "speed", "0.1"]),
+        "resume" => session.command(&["set", "pause", "no"]),
+        "stop" => session.command(&["quit"]),
+        value if value.starts_with("seek_absolute:") => {
+            let seconds = value.trim_start_matches("seek_absolute:");
+            session.command(&["seek", seconds, "absolute+exact"])
+        }
+        value if value.starts_with("audio_set:") => {
+            let index = value.trim_start_matches("audio_set:");
+            session.command(&["set", "aid", index])
+        }
+        value if value.starts_with("subtitle_set:") => {
+            let index = value.trim_start_matches("subtitle_set:");
+            let target = if index.starts_with('-') { "no" } else { index };
+            session.command(&["set", "sid", target])
+        }
+        value if value.starts_with("volume_set:") => {
+            let volume = value.trim_start_matches("volume_set:");
+            session.command(&["set", "volume", volume])
+        }
+        value if value.starts_with("speed_set:") => {
+            let speed = value.trim_start_matches("speed_set:");
+            session.command(&["set", "speed", speed])
+        }
+        value if value.starts_with("audio_delay_set:") => {
+            let delay = value.trim_start_matches("audio_delay_set:");
+            session.command(&["set", "audio-delay", delay])
+        }
+        value if value.starts_with("subtitle_delay_set:") => {
+            let delay = value.trim_start_matches("subtitle_delay_set:");
+            session.command(&["set", "sub-delay", delay])
+        }
+        value if value.starts_with("external_subtitle:") => {
+            let target = value.trim_start_matches("external_subtitle:");
+            session.command(&["sub-add", target, "select"])
+        }
+        _ => Err("Unknown playback command.".to_string()),
+    }
 }
 
 fn normalize_command(command: &str) -> Result<String, String> {
@@ -262,24 +609,12 @@ fn is_remote_subtitle(target: &str) -> bool {
 }
 
 pub(crate) fn forget_control(play_session_id: &str) {
-    if let Some(paths) = CONTROL_PATHS.get() {
-        if let Ok(mut paths) = paths.lock() {
-            paths.remove(play_session_id);
-        }
-    }
-    if let Some(paths) = PROGRESS_PATHS.get() {
-        if let Ok(mut paths) = paths.lock() {
-            paths.remove(play_session_id);
-        }
+    if let Some(session) = remove_session(play_session_id) {
+        session.destroy();
     }
     if let Some(states) = PROGRESS_STATES.get() {
         if let Ok(mut states) = states.lock() {
             states.remove(play_session_id);
-        }
-    }
-    if let Some(ids) = PROCESS_IDS.get() {
-        if let Ok(mut ids) = ids.lock() {
-            ids.remove(play_session_id);
         }
     }
     if let Some(stops) = EXPLICIT_STOPS.get() {
@@ -306,50 +641,23 @@ pub(crate) fn take_explicit_stop(play_session_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn stop_all() {
-    let control_paths = CONTROL_PATHS
-        .get()
-        .and_then(|paths| {
-            paths
-                .lock()
-                .ok()
-                .map(|paths| paths.values().cloned().collect::<Vec<_>>())
-        })
-        .unwrap_or_default();
-
-    for path in control_paths {
-        let _ = fs::write(path, "stop");
-    }
-
-    clear_sessions();
-}
-
 pub(crate) fn terminate_all() -> bool {
-    let process_ids = PROCESS_IDS
-        .get()
-        .and_then(|ids| {
-            ids.lock()
-                .ok()
-                .map(|ids| ids.values().copied().collect::<Vec<_>>())
-        })
-        .unwrap_or_default();
-    stop_all();
-    let had_processes = !process_ids.is_empty();
-    for process_id in process_ids {
-        terminate_process(process_id);
+    let sessions = active_sessions();
+    let had_sessions = !sessions.is_empty();
+    for session in &sessions {
+        let _ = session.command(&["quit"]);
     }
-    had_processes
+    clear_sessions();
+    for session in sessions {
+        session.destroy();
+    }
+    had_sessions
 }
 
 fn clear_sessions() {
-    if let Some(paths) = CONTROL_PATHS.get() {
-        if let Ok(mut paths) = paths.lock() {
-            paths.clear();
-        }
-    }
-    if let Some(paths) = PROGRESS_PATHS.get() {
-        if let Ok(mut paths) = paths.lock() {
-            paths.clear();
+    if let Some(sessions) = SESSIONS.get() {
+        if let Ok(mut sessions) = sessions.lock() {
+            sessions.clear();
         }
     }
     if let Some(states) = PROGRESS_STATES.get() {
@@ -357,84 +665,60 @@ fn clear_sessions() {
             states.clear();
         }
     }
-    if let Some(ids) = PROCESS_IDS.get() {
-        if let Ok(mut ids) = ids.lock() {
-            ids.clear();
-        }
+}
+
+pub(crate) fn restack_all(_app: &AppHandle) {}
+
+fn remember_session(play_session_id: String, session: Arc<MpvSession>) {
+    if let Ok(mut sessions) = SESSIONS.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+        sessions.insert(play_session_id, session);
     }
 }
 
-pub(crate) fn restack_all(app: &AppHandle) {
-    if let Some(ids) = PROCESS_IDS.get() {
-        if let Ok(ids) = ids.lock() {
-            for process_id in ids.values().copied() {
-                place_embedded_video_behind_webview_once(app, process_id);
-            }
-        }
-    }
-}
-
-pub(crate) fn remember_session(
-    play_session_id: String,
-    control_path: PathBuf,
-    progress_path: PathBuf,
-    process_id: u32,
-) {
-    if let Ok(mut paths) = CONTROL_PATHS
+fn active_session(play_session_id: &str) -> Result<Arc<MpvSession>, String> {
+    SESSIONS
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
-    {
-        paths.insert(play_session_id.clone(), control_path);
-    }
-    if let Ok(mut paths) = PROGRESS_PATHS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-    {
-        paths.insert(play_session_id.clone(), progress_path);
-    }
-    if let Ok(mut ids) = PROCESS_IDS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-    {
-        ids.insert(play_session_id, process_id);
-    }
+        .map_err(|_| "Failed to access playback sessions.".to_string())?
+        .get(play_session_id)
+        .cloned()
+        .ok_or_else(|| "Playback session is not active.".to_string())
 }
 
-#[cfg(target_os = "windows")]
-fn terminate_process(process_id: u32) {
-    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-    use windows_sys::Win32::System::Threading::{
-        OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
-    };
-
-    unsafe {
-        let handle = OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, process_id);
-        if !handle.is_null() {
-            if WaitForSingleObject(handle, TERMINATE_GRACE_MS) != WAIT_OBJECT_0 {
-                let _ = TerminateProcess(handle, 0);
-            }
-            let _ = CloseHandle(handle);
-        }
-    }
+fn active_sessions() -> Vec<Arc<MpvSession>> {
+    SESSIONS
+        .get()
+        .and_then(|sessions| {
+            sessions
+                .lock()
+                .ok()
+                .map(|sessions| sessions.values().cloned().collect::<Vec<_>>())
+        })
+        .unwrap_or_default()
 }
 
-#[cfg(not(target_os = "windows"))]
-fn terminate_process(_process_id: u32) {}
+fn remove_session(play_session_id: &str) -> Option<Arc<MpvSession>> {
+    SESSIONS
+        .get()
+        .and_then(|sessions| sessions.lock().ok()?.remove(play_session_id))
+}
+
+pub(crate) fn refresh_state(play_session_id: &str) -> Result<PlaybackStateResult, String> {
+    let state = active_session(play_session_id)?.state()?;
+    cache_state(play_session_id, state.clone());
+    Ok(state)
+}
 
 pub(crate) fn state(play_session_id: &str) -> Result<PlaybackStateResult, String> {
     if let Some(state) = cached_state(play_session_id)? {
         return Ok(state);
     }
-    let path = PROGRESS_PATHS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .map_err(|_| "Failed to access playback state.".to_string())?
-        .get(play_session_id)
-        .cloned()
-        .ok_or_else(|| "Playback session is not active.".to_string())?;
-    fs::read_to_string(path)
-        .map_err(|err| format!("Failed to read playback state: {err}"))
-        .and_then(|raw| parse_state(&raw))
+    let session = active_session(play_session_id)?;
+    session.state()
+}
+
+pub(crate) fn poll_playback_end(play_session_id: &str) -> Result<Option<PlaybackEnd>, String> {
+    active_session(play_session_id)?.poll_end(0.0)
 }
 
 pub(crate) fn cache_state(play_session_id: &str, state: PlaybackStateResult) {
@@ -454,41 +738,41 @@ fn cached_state(play_session_id: &str) -> Result<Option<PlaybackStateResult>, St
         .map(|states| states.get(play_session_id).cloned())
 }
 
+#[cfg(test)]
 fn parse_state(raw: &str) -> Result<PlaybackStateResult, String> {
     serde_json::from_str::<PlaybackStateResult>(raw)
         .map_err(|err| format!("Failed to parse playback state: {err}"))
 }
 
-fn mpv_start_arg(position_ticks: Option<i64>) -> Option<String> {
+fn mpv_start_value(position_ticks: Option<i64>) -> Option<String> {
     let ticks = position_ticks.filter(|ticks| *ticks > 0)?;
-    Some(format!("--start={:.3}", ticks as f64 / 10_000_000.0))
+    Some(format!("{:.3}", ticks as f64 / 10_000_000.0))
 }
 
-fn mpv_settings_args(settings: &AppSettings) -> Vec<String> {
-    vec![format!(
-        "--volume={}",
-        settings.default_volume.clamp(0, 100)
+fn mpv_settings_options(settings: &AppSettings) -> Vec<(String, String)> {
+    vec![(
+        "volume".to_string(),
+        settings.default_volume.clamp(0, 100).to_string(),
     )]
 }
 
-fn mpv_subtitle_args(
+fn mpv_subtitle_options(
     settings: &AppSettings,
     subtitle_track_position: Option<i32>,
     subtitle_url: Option<&str>,
-) -> Vec<String> {
-    let mut args = Vec::new();
+) -> Vec<(String, String)> {
+    let mut options = Vec::new();
     match subtitle_track_position {
-        Some(position) if position < 0 => args.push("--sid=no".to_string()),
+        Some(position) if position < 0 => options.push(("sid".to_string(), "no".to_string())),
         Some(position) if position > 0 && subtitle_url.is_none() => {
-            args.push(format!("--sid={position}"));
+            options.push(("sid".to_string(), position.to_string()));
         }
-        None if settings.subtitle_mode == "off" => args.push("--sid=no".to_string()),
+        None if settings.subtitle_mode == "off" && subtitle_url.is_none() => {
+            options.push(("sid".to_string(), "no".to_string()));
+        }
         _ => {}
     }
-    if let Some(url) = subtitle_url {
-        args.push(format!("--sub-file={url}"));
-    }
-    args
+    options
 }
 
 fn seek_back_seconds(settings: &AppSettings) -> i32 {
@@ -503,242 +787,23 @@ fn mpv_log_path(app: &AppHandle, item_id: &str) -> Result<PathBuf, String> {
     Ok(app_data_path(app)?.join(format!("mpv-{}-{}.log", safe_id(item_id), unix_millis())))
 }
 
-fn mpv_progress_path(app: &AppHandle, item_id: &str) -> Result<PathBuf, String> {
-    Ok(app_data_path(app)?.join(format!("mpv-{}-{}.json", safe_id(item_id), unix_millis())))
-}
-
-fn mpv_control_path(app: &AppHandle, item_id: &str) -> Result<PathBuf, String> {
-    Ok(app_data_path(app)?.join(format!(
-        "mpv-control-{}-{}.txt",
-        safe_id(item_id),
-        unix_millis()
-    )))
-}
-
-fn mpv_progress_script_path(
-    app: &AppHandle,
-    item_id: &str,
-    progress_path: &Path,
-    control_path: &Path,
-    seek_back_seconds: i32,
-    seek_forward_seconds: i32,
-) -> Result<PathBuf, String> {
-    let script_path = app_data_path(app)?.join(format!(
-        "mpv-progress-{}-{}.lua",
-        safe_id(item_id),
-        unix_millis()
-    ));
-    let progress_path = progress_path.display().to_string().replace('\\', "\\\\");
-    let control_path = control_path.display().to_string().replace('\\', "\\\\");
-    fs::write(
-        &script_path,
-        format!(
-            r#"local progress_path = "{}"
-local control_path = "{}"
-local video_ready = false
-
-local function write_progress()
-  local file = io.open(progress_path, "w")
-  if not file then return end
-  file:write(string.format('{{"timePos":%.3f,"duration":%.3f,"paused":%s,"muted":%s,"volume":%.0f,"videoReady":%s,"speed":%.2f}}',
-    mp.get_property_number("time-pos", 0),
-    mp.get_property_number("duration", 0),
-    tostring(mp.get_property_bool("pause", false)),
-    tostring(mp.get_property_bool("mute", false)),
-    mp.get_property_number("volume", 100),
-    tostring(video_ready),
-    mp.get_property_number("speed", 1)))
-  file:close()
-end
-
-local function mark_video_ready()
-  local width = mp.get_property_number("dwidth", 0)
-  local height = mp.get_property_number("dheight", 0)
-  if not video_ready and width > 0 and height > 0 then
-    video_ready = true
-    write_progress()
-  end
-end
-
-local function read_control()
-  local file = io.open(control_path, "r")
-  if not file then return end
-  local command = file:read("*a")
-  file:close()
-  os.remove(control_path)
-  command = command and command:gsub("^%s+", ""):gsub("%s+$", "")
-  if command == "toggle_pause" then
-    mp.commandv("cycle", "pause")
-  elseif command == "resume" then
-    mp.set_property_bool("pause", false)
-  elseif command == "seek_back" then
-    mp.commandv("seek", "-{}", "relative")
-  elseif command == "seek_forward" then
-    mp.commandv("seek", "{}", "relative")
-  elseif command and command:match("^seek_absolute:") then
-    local target = tonumber(command:match("^seek_absolute:(.+)$"))
-    if target then mp.commandv("seek", tostring(target), "absolute") end
-  elseif command == "volume_down" then
-    mp.commandv("add", "volume", "-5")
-  elseif command == "volume_up" then
-    mp.commandv("add", "volume", "5")
-  elseif command and command:match("^volume_set:") then
-    local volume = tonumber(command:match("^volume_set:(.+)$"))
-    if volume then
-      mp.set_property_bool("mute", volume <= 0)
-      mp.set_property_number("volume", volume)
-    end
-  elseif command == "toggle_mute" then
-    mp.commandv("cycle", "mute")
-  elseif command == "audio_next" then
-    mp.commandv("cycle", "audio")
-  elseif command == "subtitle_next" then
-    mp.commandv("cycle", "sub")
-  elseif command and command:match("^audio_set:") then
-    local track = tonumber(command:match("^audio_set:(.+)$"))
-    if track then mp.set_property_number("aid", track) end
-  elseif command and command:match("^subtitle_set:") then
-    local track = tonumber(command:match("^subtitle_set:(.+)$"))
-    if track and track < 0 then mp.set_property_string("sid", "no") elseif track then mp.set_property_number("sid", track) end
-  elseif command == "speed_down" then
-    local speed = math.max(0.5, mp.get_property_number("speed", 1) - 0.1)
-    mp.set_property_number("speed", speed)
-  elseif command == "speed_up" then
-    local speed = math.min(2.0, mp.get_property_number("speed", 1) + 0.1)
-    mp.set_property_number("speed", speed)
-  elseif command and command:match("^speed_set:") then
-    local speed = tonumber(command:match("^speed_set:(.+)$"))
-    if speed then mp.set_property_number("speed", speed) end
-  elseif command and command:match("^audio_delay_set:") then
-    local delay = tonumber(command:match("^audio_delay_set:(.+)$"))
-    if delay then mp.set_property_number("audio-delay", delay) end
-  elseif command and command:match("^subtitle_delay_set:") then
-    local delay = tonumber(command:match("^subtitle_delay_set:(.+)$"))
-    if delay then mp.set_property_number("sub-delay", delay) end
-  elseif command and command:match("^external_subtitle:") then
-    local target = command:match("^external_subtitle:(.+)$")
-    if target and #target > 0 then mp.commandv("sub-add", target, "select") end
-  elseif command == "stop" then
-    mp.commandv("quit")
-  end
-end
-
-mp.add_periodic_timer(0.25, write_progress)
-mp.add_periodic_timer(0.05, read_control)
-mp.observe_property("dwidth", "number", mark_video_ready)
-mp.observe_property("dheight", "number", mark_video_ready)
-mp.register_event("shutdown", write_progress)
-mp.register_event("file-loaded", mark_video_ready)
-mp.register_event("video-reconfig", mark_video_ready)
-write_progress()
-"#,
-            progress_path, control_path, seek_back_seconds, seek_forward_seconds
-        ),
-    )
-    .map_err(|err| format!("Failed to write mpv progress script: {err}"))?;
-    Ok(script_path)
-}
-
 #[cfg(target_os = "windows")]
-fn add_embed_args(app: &AppHandle, command: &mut Command) -> Result<(), String> {
+fn add_embed_options(app: &AppHandle, session: &MpvSession) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
-        .ok_or_else(|| "Failed to find the app window for embedded mpv.".to_string())?;
+        .ok_or_else(|| "Failed to find the app window for embedded libmpv.".to_string())?;
     let hwnd = window
         .hwnd()
         .map_err(|err| format!("Failed to get app window handle: {err}"))?;
-    command
-        .arg(format!("--wid={}", hwnd.0 as isize))
-        .args(EMBED_MPV_WINDOW_ARGS);
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn place_embedded_video_behind_webview(app: &AppHandle, process_id: u32) {
-    let Some((parent, process_id)) = embedded_video_target(app, process_id) else {
-        return;
-    };
-    thread::spawn(move || {
-        for _ in 0..EMBED_INITIAL_RESTACKS {
-            send_child_windows_to_bottom(parent, process_id);
-            thread::sleep(EMBED_INITIAL_RESTACK_DELAY);
-        }
-    });
-}
-
-#[cfg(target_os = "windows")]
-fn place_embedded_video_behind_webview_once(app: &AppHandle, process_id: u32) {
-    if let Some((parent, process_id)) = embedded_video_target(app, process_id) {
-        send_child_windows_to_bottom(parent, process_id);
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn embedded_video_target(app: &AppHandle, process_id: u32) -> Option<(isize, u32)> {
-    let Some(window) = app.get_webview_window("main") else {
-        return None;
-    };
-    let Ok(hwnd) = window.hwnd() else {
-        return None;
-    };
-    Some((hwnd.0 as isize, process_id))
-}
-
-#[cfg(target_os = "windows")]
-fn send_child_windows_to_bottom(parent: isize, process_id: u32) {
-    use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, GetClientRect, GetWindowThreadProcessId, SetWindowPos, HWND_BOTTOM,
-        SWP_NOACTIVATE,
-    };
-
-    struct Search {
-        parent: HWND,
-        process_id: u32,
-    }
-
-    unsafe extern "system" fn enum_child(hwnd: HWND, lparam: LPARAM) -> i32 {
-        let search = &mut *(lparam as *mut Search);
-        let mut owner = 0;
-        GetWindowThreadProcessId(hwnd, &mut owner);
-        if owner == search.process_id {
-            let mut rect = RECT::default();
-            GetClientRect(search.parent, &mut rect);
-            SetWindowPos(
-                hwnd,
-                HWND_BOTTOM,
-                0,
-                0,
-                rect.right - rect.left,
-                rect.bottom - rect.top,
-                SWP_NOACTIVATE,
-            );
-        }
-        1
-    }
-
-    let mut search = Search {
-        parent: parent as HWND,
-        process_id,
-    };
-    unsafe {
-        EnumChildWindows(
-            parent as HWND,
-            Some(enum_child),
-            &mut search as *mut Search as LPARAM,
-        );
-    }
+    session.set_option("wid", &(hwnd.0 as isize).to_string())?;
+    session.set_option("force-window", "yes")?;
+    session.set_option("border", "no")?;
+    session.set_option("ontop", "no")
 }
 
 #[cfg(not(target_os = "windows"))]
-fn place_embedded_video_behind_webview(_app: &AppHandle, _process_id: u32) {}
-
-#[cfg(not(target_os = "windows"))]
-fn place_embedded_video_behind_webview_once(_app: &AppHandle, _process_id: u32) {}
-
-#[cfg(not(target_os = "windows"))]
-fn add_embed_args(_app: &AppHandle, _command: &mut Command) -> Result<(), String> {
-    Ok(())
+fn add_embed_options(_app: &AppHandle, session: &MpvSession) -> Result<(), String> {
+    session.set_option("force-window", "yes")
 }
 
 fn app_data_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -786,34 +851,98 @@ fn redact_secret(text: &str, secret: &str) -> String {
     }
 }
 
+fn c_string(value: &str, context: &str) -> Result<CString, String> {
+    CString::new(value).map_err(|_| format!("{context}: value contains an embedded NUL byte."))
+}
+
+fn load_api(path: &Path) -> Result<Arc<MpvApi>, String> {
+    let mut cache = API_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "Failed to access libmpv loader cache.".to_string())?;
+    if let Some(cached) = cache.get(path) {
+        return cached.clone();
+    }
+
+    let loaded = unsafe { MpvApi::load(path).map(Arc::new) };
+    cache.insert(path.to_path_buf(), loaded.clone());
+    loaded
+}
+
 #[cfg(target_os = "windows")]
-fn default_mpv_executable_name() -> &'static str {
-    "mpv.exe"
+fn default_libmpv_library_names() -> &'static [&'static str] {
+    &["libmpv-2.dll", "mpv-2.dll"]
 }
 
-#[cfg(not(target_os = "windows"))]
-fn default_mpv_executable_name() -> &'static str {
-    "mpv"
+#[cfg(target_os = "macos")]
+fn default_libmpv_library_names() -> &'static [&'static str] {
+    &[
+        "Mpv.xcframework/macos-arm64_x86_64/Mpv.framework/Versions/A/Mpv",
+        "Mpv.framework/Versions/A/Mpv",
+        "libmpv.2.dylib",
+        "libmpv.dylib",
+    ]
 }
 
-fn mpv_not_found_message() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        "mpv.exe was not found.".to_string()
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        "mpv was not found. Install mpv with `brew install mpv` on macOS, `sudo apt install mpv` on Debian/Ubuntu, or set the mpv path in settings.".to_string()
-    }
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn default_libmpv_library_names() -> &'static [&'static str] {
+    &["libmpv.so.2", "libmpv.so"]
 }
 
-#[cfg(test)]
-fn platform_supports_embedding() -> bool {
-    cfg!(target_os = "windows")
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "windows-x86_64"
 }
 
-fn find_mpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> {
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "windows-aarch64"
+}
+
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "macos-universal"
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "linux-x86_64"
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "linux-aarch64"
+}
+
+#[cfg(not(any(
+    all(
+        target_os = "windows",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "macos",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    )
+)))]
+fn bundled_libmpv_platform_dir() -> &'static str {
+    "unknown"
+}
+
+fn libmpv_not_found_message() -> String {
+    format!(
+        "libmpv was not found. Bundle it under libmpv/{} or set the libmpv path in settings.",
+        bundled_libmpv_platform_dir()
+    )
+}
+
+fn find_libmpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> {
     if let Some(path) = settings
         .mpv_path
         .as_deref()
@@ -824,48 +953,101 @@ fn find_mpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> 
         if custom.is_file() {
             return Ok(custom);
         }
+        if custom.is_dir() {
+            if let Some(library) = find_library_in_dir(&custom) {
+                return Ok(library);
+            }
+        }
         return Err(format!(
-            "Configured mpv was not found: {}",
+            "Configured libmpv was not found: {}",
             custom.display()
         ));
     }
 
-    let executable_name = default_mpv_executable_name();
-    let mut candidates = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("mpv").join(executable_name));
-        candidates.push(cwd.join(executable_name));
-        candidates.push(cwd.join("..").join("mpv").join(executable_name));
-        candidates.push(cwd.join("..").join(executable_name));
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join("mpv").join(executable_name));
-        candidates.push(resource_dir.join(executable_name));
-    }
-    if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+    if let Some(path) = libmpv_candidates(app)
+        .into_iter()
+        .find(|path| path.is_file())
+    {
         return Ok(path);
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(PathBuf::from(executable_name))
+
+    default_libmpv_library_names()
+        .first()
+        .map(PathBuf::from)
+        .ok_or_else(libmpv_not_found_message)
+}
+
+fn libmpv_candidates(app: &AppHandle) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        push_libmpv_dir_candidates(&mut candidates, &cwd.join("libmpv"));
+        push_libmpv_dir_candidates(
+            &mut candidates,
+            &cwd.join("libmpv").join(bundled_libmpv_platform_dir()),
+        );
+        push_libmpv_dir_candidates(&mut candidates, &cwd.join("..").join("libmpv"));
+        push_libmpv_dir_candidates(
+            &mut candidates,
+            &cwd.join("..")
+                .join("libmpv")
+                .join(bundled_libmpv_platform_dir()),
+        );
+        push_libmpv_dir_candidates(&mut candidates, &cwd.join("mpv"));
+        push_libmpv_dir_candidates(&mut candidates, &cwd.join("..").join("mpv"));
     }
-    #[cfg(target_os = "windows")]
-    {
-        Err(mpv_not_found_message())
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        push_libmpv_dir_candidates(&mut candidates, &resource_dir.join("libmpv"));
+        push_libmpv_dir_candidates(
+            &mut candidates,
+            &resource_dir
+                .join("libmpv")
+                .join(bundled_libmpv_platform_dir()),
+        );
+        push_libmpv_dir_candidates(&mut candidates, &resource_dir.join("mpv"));
+    }
+    candidates
+}
+
+fn push_libmpv_dir_candidates(candidates: &mut Vec<PathBuf>, dir: &Path) {
+    for name in default_libmpv_library_names() {
+        candidates.push(dir.join(name));
     }
 }
 
-fn find_mpv_config_dir(app: &AppHandle) -> Option<PathBuf> {
+fn find_library_in_dir(dir: &Path) -> Option<PathBuf> {
+    default_libmpv_library_names()
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+}
+
+fn find_libmpv_config_dir(app: &AppHandle) -> Option<PathBuf> {
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let bundled = resource_dir.join("mpv");
-        if is_dir(&bundled) {
-            return Some(bundled);
+        for bundled in [
+            resource_dir.join("mpv"),
+            resource_dir.join("libmpv"),
+            resource_dir
+                .join("libmpv")
+                .join(bundled_libmpv_platform_dir()),
+        ] {
+            if is_dir(&bundled) {
+                return Some(bundled);
+            }
         }
     }
     let cwd = std::env::current_dir().ok()?;
-    [cwd.join("mpv"), cwd.join("..").join("mpv")]
-        .into_iter()
-        .find(|path| is_dir(path))
+    [
+        cwd.join("mpv"),
+        cwd.join("..").join("mpv"),
+        cwd.join("libmpv"),
+        cwd.join("libmpv").join(bundled_libmpv_platform_dir()),
+        cwd.join("..").join("libmpv"),
+        cwd.join("..")
+            .join("libmpv")
+            .join(bundled_libmpv_platform_dir()),
+    ]
+    .into_iter()
+    .find(|path| is_dir(path))
 }
 
 fn is_dir(path: &Path) -> bool {
@@ -935,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_progress_written_by_mpv_script() {
+    fn parses_progress_written_by_libmpv_state_poll() {
         let state = parse_state(
             r#"{"timePos":12.5,"duration":120.0,"paused":false,"muted":true,"volume":42}"#,
         )
@@ -960,51 +1142,48 @@ mod tests {
     }
 
     #[test]
-    fn converts_resume_ticks_to_mpv_start_arg() {
-        assert_eq!(
-            mpv_start_arg(Some(90_500_000)),
-            Some("--start=9.050".to_string())
-        );
-        assert_eq!(mpv_start_arg(Some(0)), None);
-        assert_eq!(mpv_start_arg(None), None);
+    fn converts_resume_ticks_to_libmpv_start_value() {
+        assert_eq!(mpv_start_value(Some(90_500_000)), Some("9.050".to_string()));
+        assert_eq!(mpv_start_value(Some(0)), None);
+        assert_eq!(mpv_start_value(None), None);
     }
 
     #[test]
-    fn converts_app_settings_to_mpv_args() {
+    fn converts_app_settings_to_libmpv_options() {
         let settings = AppSettings {
             default_volume: 65,
             subtitle_mode: "off".to_string(),
             ..Default::default()
         };
 
-        let args = mpv_settings_args(&settings);
+        let options = mpv_settings_options(&settings);
 
-        assert!(args.contains(&"--volume=65".to_string()));
-        assert!(!args.contains(&"--sid=no".to_string()));
+        assert!(options.contains(&("volume".to_string(), "65".to_string())));
+        assert!(!options.contains(&("sid".to_string(), "no".to_string())));
         assert_eq!(
-            mpv_subtitle_args(&settings, None, None),
-            vec!["--sid=no".to_string()]
+            mpv_subtitle_options(&settings, None, None),
+            vec![("sid".to_string(), "no".to_string())]
         );
     }
 
     #[test]
-    fn converts_explicit_subtitle_selection_to_mpv_args() {
+    fn converts_explicit_subtitle_selection_to_libmpv_options() {
         let settings = AppSettings {
             subtitle_mode: "off".to_string(),
             ..Default::default()
         };
 
         assert_eq!(
-            mpv_subtitle_args(&settings, Some(2), None),
-            vec!["--sid=2".to_string()]
+            mpv_subtitle_options(&settings, Some(2), None),
+            vec![("sid".to_string(), "2".to_string())]
         );
         assert_eq!(
-            mpv_subtitle_args(&settings, Some(-1), None),
-            vec!["--sid=no".to_string()]
+            mpv_subtitle_options(&settings, Some(-1), None),
+            vec![("sid".to_string(), "no".to_string())]
         );
         assert_eq!(
-            mpv_subtitle_args(&settings, Some(1), Some("http://example.test/sub.srt")),
-            vec!["--sub-file=http://example.test/sub.srt".to_string()]
+            mpv_subtitle_options(&settings, Some(1), Some("http://example.test/sub.srt")),
+            Vec::<(String, String)>::new()
         );
     }
 
@@ -1072,86 +1251,74 @@ mod tests {
     }
 
     #[test]
-    fn terminate_all_reports_when_no_process_was_active() {
+    fn terminate_all_reports_when_no_session_was_active() {
         clear_sessions();
 
         assert!(!terminate_all());
     }
 
     #[test]
-    fn startup_check_is_short_enough_for_responsive_playback() {
-        assert!(MPV_STARTUP_CHECK_MAX <= Duration::from_millis(300));
-        assert!(MPV_STARTUP_CHECK_INTERVAL <= MPV_STARTUP_CHECK_MAX);
-    }
-
-    #[test]
-    fn default_mpv_executable_matches_current_platform() {
+    fn default_libmpv_library_names_match_current_platform() {
         #[cfg(target_os = "windows")]
-        assert_eq!(default_mpv_executable_name(), "mpv.exe");
+        assert_eq!(
+            default_libmpv_library_names(),
+            &["libmpv-2.dll", "mpv-2.dll"]
+        );
 
-        #[cfg(not(target_os = "windows"))]
-        assert_eq!(default_mpv_executable_name(), "mpv");
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            default_libmpv_library_names(),
+            &[
+                "Mpv.xcframework/macos-arm64_x86_64/Mpv.framework/Versions/A/Mpv",
+                "Mpv.framework/Versions/A/Mpv",
+                "libmpv.2.dylib",
+                "libmpv.dylib",
+            ]
+        );
+
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        assert_eq!(
+            default_libmpv_library_names(),
+            &["libmpv.so.2", "libmpv.so"]
+        );
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
-    fn non_windows_mpv_not_found_message_mentions_install_options() {
-        let message = mpv_not_found_message();
+    fn libmpv_not_found_message_mentions_platform_bundle() {
+        let message = libmpv_not_found_message();
 
-        assert!(message.contains("brew install mpv"));
-        assert!(message.contains("sudo apt install mpv"));
-        assert!(message.contains("set the mpv path in settings"));
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    #[test]
-    fn non_windows_embedding_is_noop() {
-        assert!(!platform_supports_embedding());
+        assert!(message.contains("libmpv/"));
+        assert!(message.contains(bundled_libmpv_platform_dir()));
+        assert!(message.contains("set the libmpv path in settings"));
     }
 
     #[test]
     fn disables_mpv_builtin_controls() {
         for expected in [
-            "--input-default-bindings=no",
-            "--input-vo-keyboard=no",
-            "--osc=no",
-            "--osd-bar=no",
-            "--osd-level=0",
+            ("input-default-bindings", "no"),
+            ("input-vo-keyboard", "no"),
+            ("osd-bar", "no"),
+            ("osd-level", "0"),
         ] {
-            assert!(DISABLE_MPV_UI_ARGS.contains(&expected));
+            assert!(DISABLE_MPV_UI_OPTIONS.contains(&expected));
         }
     }
 
     #[test]
-    fn embeds_mpv_as_borderless_non_topmost_window() {
-        for expected in ["--force-window=yes", "--no-border", "--ontop=no"] {
-            assert!(EMBED_MPV_WINDOW_ARGS.contains(&expected));
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn limits_startup_restack_work() {
-        assert!(EMBED_INITIAL_RESTACKS <= 40);
-        assert!(EMBED_INITIAL_RESTACK_DELAY <= Duration::from_millis(25));
-        assert!(TERMINATE_GRACE_MS <= 700);
-    }
-
-    #[test]
-    fn runs_mpv_as_embedded_playback_engine() {
-        for expected in ["--no-ytdl", "--keep-open=no"] {
-            assert!(MPV_ENGINE_ARGS.contains(&expected));
+    fn runs_libmpv_as_playback_engine() {
+        for expected in [("keep-open", "no")] {
+            assert!(MPV_ENGINE_OPTIONS.contains(&expected));
         }
     }
 
     #[test]
-    fn starts_mpv_paused_until_the_webview_is_ready() {
-        assert!(MPV_SYNC_START_ARGS.contains(&"--pause=yes"));
+    fn starts_libmpv_paused_until_the_webview_is_ready() {
+        assert!(MPV_SYNC_START_OPTIONS.contains(&("pause", "yes")));
     }
 
     #[test]
     fn avoids_verbose_mpv_log_writes_during_playback() {
-        assert_eq!(MPV_LOG_LEVEL_ARG, "--msg-level=all=warn");
+        assert_eq!(MPV_LOG_LEVEL, "all=warn");
     }
 
     #[test]

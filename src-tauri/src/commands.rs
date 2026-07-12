@@ -643,18 +643,10 @@ fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String
     let watched_media_source_id = result.media_source_id.clone();
     let watched_audio_stream_index = input.audio_stream_index;
     let watched_subtitle_stream_index = input.subtitle_stream_index;
-    mpv::remember_session(
-        play_session_id.clone(),
-        launch.control_path.clone(),
-        launch.progress_path.clone(),
-        launch.child.id(),
-    );
     thread::spawn(move || {
         crate::playback_watch::watch_mpv_playback(crate::playback_watch::WatchMpvPlaybackInput {
             app,
             server,
-            child: launch.child,
-            progress_path: launch.progress_path,
             item_id: watched_item_id,
             media_source_id: watched_media_source_id,
             play_session_id,

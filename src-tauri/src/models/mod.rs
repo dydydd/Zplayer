@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn normalize_settings_clamps_and_whitelists_user_input() {
         let settings = normalize_settings(SaveSettingsInput {
-            mpv_path: Some("  C:/mpv/mpv.exe  ".to_string()),
+            mpv_path: Some("  C:/libmpv/libmpv-2.dll  ".to_string()),
             default_volume: Some(140),
             seek_back_seconds: Some(1),
             seek_forward_seconds: Some(999),
@@ -64,7 +64,7 @@ mod tests {
             language: Some("fr-FR".to_string()),
         });
 
-        assert_eq!(settings.mpv_path.as_deref(), Some("C:/mpv/mpv.exe"));
+        assert_eq!(settings.mpv_path.as_deref(), Some("C:/libmpv/libmpv-2.dll"));
         assert_eq!(settings.default_volume, 100);
         assert_eq!(settings.seek_back_seconds, 5);
         assert_eq!(settings.seek_forward_seconds, 180);

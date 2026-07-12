@@ -24,8 +24,6 @@ struct PlaybackStoppedEvent {
 pub(crate) struct WatchMpvPlaybackInput {
     pub(crate) app: AppHandle,
     pub(crate) server: SavedServer,
-    pub(crate) child: std::process::Child,
-    pub(crate) progress_path: std::path::PathBuf,
     pub(crate) item_id: String,
     pub(crate) media_source_id: Option<String>,
     pub(crate) play_session_id: String,
@@ -38,8 +36,6 @@ pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
     let WatchMpvPlaybackInput {
         app,
         server,
-        mut child,
-        progress_path,
         item_id,
         media_source_id,
         play_session_id,
@@ -54,9 +50,8 @@ pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
     loop {
         thread::sleep(LOCAL_PROGRESS_POLL_INTERVAL);
         report_elapsed += LOCAL_PROGRESS_POLL_INTERVAL;
-        let progress = read_mpv_progress(&progress_path);
+        let progress = mpv::refresh_state(&play_session_id).ok();
         if let Some(progress) = progress.as_ref() {
-            mpv::cache_state(&play_session_id, progress.clone());
             last_ticks = progress
                 .time_pos
                 .map(seconds_to_ticks)
@@ -97,9 +92,9 @@ pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
                 }
             }
         }
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let failed = !status.success();
+        match mpv::poll_playback_end(&play_session_id) {
+            Ok(Some(end)) => {
+                let failed = end.failed;
                 let explicit_stop = mpv::take_explicit_stop(&play_session_id);
                 let completed = playback_completed(progress.as_ref(), failed, explicit_stop);
                 if let Some(client) = client.clone() {
@@ -145,12 +140,6 @@ pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
             Err(_) => break,
         }
     }
-}
-
-fn read_mpv_progress(path: &std::path::Path) -> Option<PlaybackStateResult> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
 }
 
 fn seconds_to_ticks(seconds: f64) -> i64 {
