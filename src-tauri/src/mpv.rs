@@ -461,6 +461,9 @@ impl MpvSession {
                 let result = crate::platform_window::with_native_video_area(|area| {
                     use gtk::prelude::*;
 
+                    area.show();
+                    area.queue_resize();
+                    area.realize();
                     area.make_current();
                     area.attach_buffers();
                     let wayland_display = wayland_display_for_gl_area(area)?;
@@ -1181,6 +1184,7 @@ fn clear_active_render_context(context: *mut c_void) {
             *active = None;
         }
     }
+    crate::platform_window::set_native_video_visible(false);
     crate::platform_window::queue_native_video_render();
 }
 

@@ -13,6 +13,12 @@ static NATIVE_VIDEO_RENDER_WIDTH: AtomicI32 = AtomicI32::new(0);
 static NATIVE_VIDEO_RENDER_HEIGHT: AtomicI32 = AtomicI32::new(0);
 #[cfg(target_os = "linux")]
 static NATIVE_VIDEO_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
+#[cfg(target_os = "linux")]
+const NATIVE_VIDEO_MARGIN_TOP: i32 = 92;
+#[cfg(target_os = "linux")]
+const NATIVE_VIDEO_MARGIN_BOTTOM: i32 = 150;
+#[cfg(target_os = "linux")]
+const NATIVE_VIDEO_MARGIN_SIDE: i32 = 92;
 
 #[cfg(target_os = "linux")]
 thread_local! {
@@ -115,6 +121,11 @@ fn install_native_video_overlay<R: Runtime>(
         video_area.set_vexpand(true);
         video_area.set_auto_render(false);
         video_area.set_has_alpha(false);
+        video_area.set_no_show_all(true);
+        video_area.set_margin_top(NATIVE_VIDEO_MARGIN_TOP);
+        video_area.set_margin_bottom(NATIVE_VIDEO_MARGIN_BOTTOM);
+        video_area.set_margin_start(NATIVE_VIDEO_MARGIN_SIDE);
+        video_area.set_margin_end(NATIVE_VIDEO_MARGIN_SIDE);
         video_area.connect_render(|area, _context| handle_native_video_render(area));
         webview.set_app_paintable(true);
         webview.set_background_color(&transparent);
@@ -131,9 +142,9 @@ fn install_native_video_overlay<R: Runtime>(
         }
 
         container.remove(&webview);
-        overlay.add(&video_area);
-        overlay.add_overlay(&webview);
-        overlay.set_overlay_pass_through(&webview, false);
+        overlay.add(&webview);
+        overlay.add_overlay(&video_area);
+        overlay.set_overlay_pass_through(&video_area, true);
         gtk_window.remove(&container);
         gtk_window.add(&overlay);
         NATIVE_VIDEO_AREA.with(|stored| {
@@ -141,6 +152,9 @@ fn install_native_video_overlay<R: Runtime>(
         });
         let _ = NATIVE_VIDEO_THREAD.set(std::thread::current().id());
         gtk_window.show_all();
+        let _ = with_native_video_area(|area| {
+            area.hide();
+        });
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
     Ok(())
@@ -159,6 +173,26 @@ fn handle_native_video_render(area: &gtk::GLArea) -> gtk::glib::Propagation {
 #[cfg(target_os = "linux")]
 pub(crate) fn with_native_video_area<T>(action: impl FnOnce(&gtk::GLArea) -> T) -> Option<T> {
     NATIVE_VIDEO_AREA.with(|stored| stored.borrow().as_ref().map(action))
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn set_native_video_visible(visible: bool) {
+    if !gtk::glib::MainContext::default().is_owner() {
+        gtk::glib::idle_add_once(move || set_native_video_visible(visible));
+        return;
+    }
+
+    let _ = with_native_video_area(|area| {
+        use gtk::prelude::*;
+
+        if visible {
+            area.show();
+            area.queue_resize();
+            area.queue_render();
+        } else {
+            area.hide();
+        }
+    });
 }
 
 #[cfg(target_os = "linux")]
