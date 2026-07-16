@@ -121,6 +121,7 @@ export function ScrollableStage({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollStateRef = useRef({ left: false, right: false });
+  const scrollFrameRef = useRef<number | null>(null);
 
   function updateScrollState() {
     const row = rowRef.current;
@@ -131,6 +132,19 @@ export function ScrollableStage({
     scrollStateRef.current = { left: nextLeft, right: nextRight };
     setCanScrollLeft(nextLeft);
     setCanScrollRight(nextRight);
+  }
+
+  function scheduleScrollState(persistKey?: string) {
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const row = rowRef.current;
+      if (!row) return;
+      if (persistKey) {
+        sessionStorage.setItem(persistKey, String(row.scrollLeft));
+      }
+      updateScrollState();
+    });
   }
 
   function scrollByPage(direction: -1 | 1) {
@@ -151,16 +165,19 @@ export function ScrollableStage({
       row.scrollLeft = Number(sessionStorage.getItem(`row-scroll:${scrollKey}`) ?? 0);
     }
     updateScrollState();
+    const storageKey = scrollKey ? `row-scroll:${scrollKey}` : undefined;
     function handleScroll() {
-      const currentRow = rowRef.current;
-      if (scrollKey && currentRow) sessionStorage.setItem(`row-scroll:${scrollKey}`, String(currentRow.scrollLeft));
-      updateScrollState();
+      scheduleScrollState(storageKey);
     }
     row.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", updateScrollState);
+    window.addEventListener("resize", handleScroll);
     return () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
       row.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", updateScrollState);
+      window.removeEventListener("resize", handleScroll);
     };
   }, [itemCount, scrollKey]);
 
