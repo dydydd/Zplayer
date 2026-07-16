@@ -1,4 +1,5 @@
 ﻿import { memo, useEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { UiIcon } from "./icons";
@@ -6,9 +7,22 @@ import { bg, itemMeta } from "./media";
 import { rotateDaily } from "./viewLogic";
 import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
 
-const HOME_PRELOAD_IMAGE_LIMIT = 48;
-const HOME_ROW_EAGER_IMAGES = 4;
-const HERO_ROW_EAGER_IMAGES = 8;
+const HOME_PRELOAD_IMAGE_LIMIT = 28;
+const HOME_PRELOAD_BATCH_SIZE = 3;
+const HOME_PRELOAD_START_DELAY = 500;
+const HOME_ROW_EAGER_IMAGES = 2;
+const HOME_EAGER_LIBRARY_ROW_LIMIT = 1;
+const HERO_ROW_EAGER_IMAGES = 5;
+
+type IdleDeadlineLike = {
+  didTimeout?: boolean;
+  timeRemaining: () => number;
+};
+
+type IdleWindow = Window & typeof globalThis & {
+  requestIdleCallback?: (callback: (deadline: IdleDeadlineLike) => void, options?: { timeout: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
 
 export function HomeView({
   home,
@@ -102,13 +116,7 @@ export function HomeView({
       return;
     }
 
-    preloadedImages.current = collectHomePreloadUrls(home, heroItems).map((src) => {
-      const image = new window.Image();
-      image.decoding = "async";
-      image.loading = "eager";
-      image.src = src;
-      return image;
-    });
+    return scheduleHomeImagePreloads(collectHomePreloadUrls(home, heroItems), preloadedImages);
   }, [heroItems, home]);
 
   useEffect(() => {
@@ -226,7 +234,7 @@ export function HomeView({
         {home?.libraries.length ? (
           <LibraryShelf libraries={home.libraries} onOpenLibrary={onOpenLibrary} />
         ) : null}
-        {(home?.libraryLatest ?? []).map((row) => (
+        {(home?.libraryLatest ?? []).map((row, rowIndex) => (
           <MediaShelf
             key={row.library.id}
             title={row.library.name}
@@ -236,7 +244,7 @@ export function HomeView({
             onOpenLibrary={onOpenLibrary}
             floatingControls
             poster
-            eagerImageCount={HOME_ROW_EAGER_IMAGES}
+            eagerImageCount={rowIndex < HOME_EAGER_LIBRARY_ROW_LIMIT ? HOME_ROW_EAGER_IMAGES : 0}
           />
         ))}
       </div>
@@ -307,7 +315,7 @@ const MediaShelf = memo(function MediaShelf({
                 src={poster ? item.primaryImageUrl : item.backdropUrl ?? item.primaryImageUrl}
                 alt={item.name}
                 loading={index < eagerImageCount ? "eager" : "lazy"}
-                fetchPriority={index < Math.min(eagerImageCount, 4) ? "high" : "auto"}
+                fetchPriority={index < Math.min(eagerImageCount, 4) ? "high" : "low"}
               />
               {item.communityRating && <span className="score">{item.communityRating.toFixed(1)}</span>}
               <strong>{item.name}</strong>
@@ -340,6 +348,64 @@ function collectHomePreloadUrls(home: HomePayload, heroItems: MediaItem[]) {
   });
 
   return urls;
+}
+
+function scheduleHomeImagePreloads(urls: string[], target: MutableRefObject<HTMLImageElement[]>) {
+  const idleWindow = window as IdleWindow;
+  let cancelled = false;
+  let cursor = 0;
+  let startTimer: number | null = null;
+  let idleHandle: number | null = null;
+  let fallbackTimer: number | null = null;
+
+  target.current = [];
+
+  const preloadOne = () => {
+    const src = urls[cursor];
+    cursor += 1;
+    const image = new window.Image();
+    image.decoding = "async";
+    image.fetchPriority = "low";
+    image.loading = "lazy";
+    image.src = src;
+    target.current.push(image);
+  };
+
+  const queueNextBatch = () => {
+    if (cancelled || cursor >= urls.length) return;
+    if (idleWindow.requestIdleCallback) {
+      idleHandle = idleWindow.requestIdleCallback(runBatch, { timeout: 1600 });
+      return;
+    }
+    fallbackTimer = window.setTimeout(() => runBatch({ timeRemaining: () => 8 }), 140);
+  };
+
+  const runBatch = (deadline: IdleDeadlineLike) => {
+    idleHandle = null;
+    fallbackTimer = null;
+    if (cancelled) return;
+
+    let count = 0;
+    while (
+      cursor < urls.length
+      && count < HOME_PRELOAD_BATCH_SIZE
+      && (deadline.didTimeout || deadline.timeRemaining() > 2 || count === 0)
+    ) {
+      preloadOne();
+      count += 1;
+    }
+    queueNextBatch();
+  };
+
+  startTimer = window.setTimeout(queueNextBatch, HOME_PRELOAD_START_DELAY);
+
+  return () => {
+    cancelled = true;
+    target.current = [];
+    if (startTimer !== null) window.clearTimeout(startTimer);
+    if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
+    if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+  };
 }
 
 function ProgressBar({ item }: { item: MediaItem }) {
