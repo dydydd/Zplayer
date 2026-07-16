@@ -866,9 +866,9 @@ pub(crate) fn launch(
             start_position_ticks,
         },
     )?;
+    session.initialize()?;
     #[cfg(target_os = "linux")]
     session.initialize_render_context(app)?;
-    session.initialize()?;
     session.command(&["loadfile", stream_url, "replace"])?;
     if let Some(url) = subtitle_url {
         let _ = session.command(&["sub-add", url, "select"]);
