@@ -1,5 +1,8 @@
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Runtime;
+
+static NATIVE_VIDEO_OVERLAY_INSTALLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DesktopPlatform {
@@ -22,6 +25,7 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) gdk_backend: Option<String>,
     pub(crate) wayland_required: bool,
     pub(crate) gdk_backend_wayland: bool,
+    pub(crate) native_video_overlay: bool,
     pub(crate) opaque_window: bool,
 }
 
@@ -55,7 +59,44 @@ pub(crate) fn create_main_window<R: Runtime>(
     } else {
         builder
     };
-    builder.build()?;
+    let window = builder.build()?;
+    #[cfg(target_os = "linux")]
+    install_native_video_overlay(&window)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn install_native_video_overlay<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use gtk::prelude::*;
+
+    let webview_window = window.clone();
+    let container_window = window.clone();
+    webview_window.with_webview(move |webview| {
+        let Ok(container) = container_window.default_vbox() else {
+            return;
+        };
+        let webview = webview.inner();
+        let overlay = gtk::Overlay::new();
+        let video_area = gtk::GLArea::new();
+
+        overlay.set_hexpand(true);
+        overlay.set_vexpand(true);
+        video_area.set_widget_name("zplayer-native-video");
+        video_area.set_hexpand(true);
+        video_area.set_vexpand(true);
+        video_area.set_auto_render(false);
+        video_area.set_has_alpha(false);
+
+        container.remove(&webview);
+        overlay.add(&video_area);
+        overlay.add_overlay(&webview);
+        overlay.set_overlay_pass_through(&webview, false);
+        container.pack_start(&overlay, true, true, 0);
+        container.show_all();
+        NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
+    })?;
     Ok(())
 }
 
@@ -77,6 +118,7 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
             .is_some_and(|value| !value.is_empty()),
         wayland_required: current_platform() == DesktopPlatform::Linux,
         gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
+        native_video_overlay: NATIVE_VIDEO_OVERLAY_INSTALLED.load(Ordering::SeqCst),
         gdk_backend,
         opaque_window,
     }

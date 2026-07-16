@@ -64,6 +64,7 @@ export type LinuxWindowDiagnostics = {
   gdkBackend?: string | null;
   waylandRequired: boolean;
   gdkBackendWayland: boolean;
+  nativeVideoOverlay: boolean;
   opaqueWindow: boolean;
 };
 

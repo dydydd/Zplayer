@@ -212,6 +212,7 @@ export function SettingsView({
                   `GDK_BACKEND: ${linuxWindowDiagnostics.gdkBackend ?? t("common.unset")}`,
                   `Wayland only: ${linuxWindowDiagnostics.waylandRequired ? t("common.yes") : t("common.no")}`,
                   `Wayland backend: ${linuxWindowDiagnostics.gdkBackendWayland ? t("common.yes") : t("common.no")}`,
+                  `Native video layer: ${linuxWindowDiagnostics.nativeVideoOverlay ? t("common.yes") : t("common.no")}`,
                   `Opaque window: ${linuxWindowDiagnostics.opaqueWindow ? t("common.yes") : t("common.no")}`,
                 ].join("\n")}</pre>
               )}
