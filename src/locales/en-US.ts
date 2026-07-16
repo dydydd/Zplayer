@@ -197,6 +197,7 @@ export const enUS = {
   },
   player: {
     playingTitle: "Now playing",
+    initializing: "Initializing...",
     paused: "Paused",
     playing: "Playing",
     connectingPlayer: "Connecting player...",
@@ -211,6 +212,7 @@ export const enUS = {
     unmute: "Unmute",
     mute: "Mute",
     fullscreen: "Fullscreen",
+    settings: "Settings",
     audio: "Audio",
     selectAudio: "Select audio",
     subtitle: "Subtitles",

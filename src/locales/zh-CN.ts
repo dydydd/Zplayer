@@ -195,6 +195,7 @@ export const zhCN = {
   },
   player: {
     playingTitle: "正在播放",
+    initializing: "正在初始化...",
     paused: "已暂停",
     playing: "正在播放",
     connectingPlayer: "连接播放器...",
@@ -209,6 +210,7 @@ export const zhCN = {
     unmute: "取消静音",
     mute: "静音",
     fullscreen: "全屏",
+    settings: "设置",
     audio: "音轨",
     selectAudio: "选择音轨",
     subtitle: "字幕",

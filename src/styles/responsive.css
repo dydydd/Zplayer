@@ -146,10 +146,6 @@
     gap: 10px;
   }
 
-  .player-heading {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
@@ -390,8 +386,23 @@
     gap: 6px !important;
   }
 
-  .player-controls {
+  .player-bottom {
     width: calc(100vw - 32px);
+  }
+
+  .player-volume-rail {
+    left: 16px;
+  }
+
+  .player-volume-rail input {
+    height: 96px;
+  }
+
+  .player-secondary-actions {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    justify-content: center;
   }
 
   .player-main-actions {
@@ -399,6 +410,10 @@
   }
 
   .player-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .external-subtitle-form {
     grid-template-columns: 1fr;
   }
 }
