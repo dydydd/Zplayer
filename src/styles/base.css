@@ -45,7 +45,8 @@ html.playing-embedded body,
 html.playing-embedded #root,
 html.playing-embedded .app,
 html.playing-embedded .workspace,
-html.playing-embedded .page {
+html.playing-embedded .page,
+html.playing-embedded .player-page {
   background: transparent !important;
 }
 
@@ -309,4 +310,3 @@ html.playing-embedded .error {
 .page.narrow {
   max-width: 1050px;
 }
-

@@ -291,20 +291,18 @@ function App() {
   }, [view]);
 
   useLayoutEffect(() => {
-    const playing = view.name === "player" && playbackState?.videoReady && playerTransparent;
+    const playing = view.name === "player" && playerTransparent;
     document.documentElement.classList.toggle("playing-embedded", playing);
     document.body.classList.toggle("playing-embedded", playing);
     return () => {
       document.documentElement.classList.remove("playing-embedded");
       document.body.classList.remove("playing-embedded");
     };
-  }, [view.name, playbackState?.videoReady, playerTransparent]);
+  }, [view.name, playerTransparent]);
 
   useEffect(() => {
-    setPlayerTransparent(false);
-    if (view.name !== "player" || !view.playSessionId || !playbackState?.videoReady) return;
-    setPlayerTransparent(true);
-  }, [view.name, view.name === "player" ? view.playSessionId : null, playbackState?.videoReady]);
+    setPlayerTransparent(view.name === "player" && !!view.playSessionId);
+  }, [view.name, view.name === "player" ? view.playSessionId : null]);
 
   useEffect(() => {
     if (view.name !== "player" || !view.playSessionId || !playerTransparent) return;
