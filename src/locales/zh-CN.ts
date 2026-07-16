@@ -198,6 +198,7 @@ export const zhCN = {
     initializing: "正在初始化...",
     paused: "已暂停",
     playing: "正在播放",
+    loadingSpeed: "加载速度 {{speed}}",
     connectingPlayer: "连接播放器...",
     connectingProgress: "正在连接进度",
     seekProgress: "跳转播放进度",

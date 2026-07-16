@@ -205,6 +205,7 @@ mod tests {
             muted: false,
             volume: Some(100),
             speed: Some(1.0),
+            cache_speed: None,
             video_ready: true,
         };
 
@@ -225,6 +226,7 @@ mod tests {
             muted: false,
             volume: Some(100),
             speed: Some(1.0),
+            cache_speed: None,
             video_ready: false,
         };
 
@@ -243,6 +245,7 @@ mod tests {
             muted: false,
             volume: Some(100),
             speed: Some(1.0),
+            cache_speed: None,
             video_ready: true,
         };
 
@@ -260,6 +263,7 @@ mod tests {
             muted: false,
             volume: Some(100),
             speed: Some(1.0),
+            cache_speed: None,
             video_ready: true,
         };
         let missing_duration = PlaybackStateResult {

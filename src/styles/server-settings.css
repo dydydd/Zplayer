@@ -55,13 +55,8 @@ h2 {
   transform: translateY(-14px);
 }
 
-.back::before {
-  width: 13px;
-  height: 13px;
-  border-bottom: 2.5px solid currentColor;
-  border-left: 2.5px solid currentColor;
-  content: "";
-  transform: translateX(2px) rotate(45deg);
+.back .ui-icon {
+  font-size: 24px;
 }
 
 .floating {
@@ -662,4 +657,3 @@ h2 {
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(12px) saturate(1.08);
 }
-

@@ -200,6 +200,7 @@ export const enUS = {
     initializing: "Initializing...",
     paused: "Paused",
     playing: "Playing",
+    loadingSpeed: "Loading {{speed}}",
     connectingPlayer: "Connecting player...",
     connectingProgress: "Connecting progress",
     seekProgress: "Seek playback position",

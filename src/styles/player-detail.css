@@ -3,17 +3,6 @@
   background: radial-gradient(circle at 70% 12%, rgba(90, 98, 120, 0.22), transparent 30%), #070708;
 }
 
-.ui-svg {
-  width: 1em;
-  height: 1em;
-  display: block;
-}
-
-.detail-page .back::before,
-.player-page .back::before {
-  display: none;
-}
-
 .detail-page .floating-back {
   top: 42px;
   left: 38px;
@@ -417,7 +406,7 @@
   font-size: 12px;
 }
 
-.player-option-grid .ui-svg {
+.player-option-grid .ui-icon {
   flex: 0 0 auto;
   font-size: 20px;
 }
@@ -584,10 +573,6 @@
   font-weight: 1000;
 }
 
-.hero-actions .play span::after {
-  display: none;
-}
-
 .hero-actions .mark-round,
 .hero-actions .mark-text {
   display: grid;
@@ -711,7 +696,7 @@
   white-space: nowrap;
 }
 
-.season-toggle .ui-svg {
+.season-toggle .ui-icon {
   font-size: 18px;
   transform: rotate(90deg);
   transition: transform 0.2s var(--tv-ease);
@@ -770,7 +755,7 @@
   background: rgba(255, 255, 255, 0.98);
 }
 
-.season-switcher.open .season-toggle .ui-svg {
+.season-switcher.open .season-toggle .ui-icon {
   transform: rotate(-90deg);
 }
 

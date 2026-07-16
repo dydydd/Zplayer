@@ -3,39 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import { ipc } from "./ipc";
 import i18n from "./i18n";
+import { UiIcon } from "./icons";
 import type { ItemDetailPayload, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
 import { bg, episodeLabel, runtimeLabel } from "./media";
 import { subtitleDialogFilters } from "./subtitleDialog";
 import { formatTime, mediaVersionFacts } from "./viewLogic";
 import { Image, Poster, ScrollableStage, useFloatingBackVisible } from "./viewParts";
 
-type IconName = "play" | "heart" | "check" | "back" | "close" | "min" | "max" | "fullscreen" | "pause" | "next" | "captions" | "more" | "volume" | "previous" | "rewind" | "forward" | "music" | "settings";
 type DetailPicker = "source" | "quality" | "audio" | "subtitle";
-
-function SvgIcon({ name }: { name: IconName }) {
-  return (
-    <svg className="ui-svg" viewBox="0 0 24 24" aria-hidden="true">
-      {name === "play" && <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />}
-      {name === "heart" && <path d="M12 20s-7-4.4-8.8-9.1C1.9 7.5 4.2 4.5 7.5 4.5c1.9 0 3.4 1 4.5 2.5 1.1-1.5 2.6-2.5 4.5-2.5 3.3 0 5.6 3 4.3 6.4C19 15.6 12 20 12 20Z" fill="currentColor" />}
-      {name === "check" && <path d="m5 12.2 4.1 4.1L19.5 6.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "back" && <path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "close" && <path d="m6.5 6.5 11 11m0-11-11 11" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />}
-      {name === "min" && <path d="M7 12h10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />}
-      {name === "max" && <path d="M7.5 7.5h9v9h-9z" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />}
-      {name === "fullscreen" && <path d="M8.5 4.5h-4v4m11-4h4v4m0 7v4h-4m-7 0h-4v-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "pause" && <path d="M8 6h3v12H8zm5 0h3v12h-3z" fill="currentColor" />}
-      {name === "next" && <path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "previous" && <path d="M7 5v14m11-13-8 6 8 6V6Z" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "rewind" && <path d="m11 6-6 6 6 6V6Zm8 0-6 6 6 6V6Z" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "forward" && <path d="m5 6 6 6-6 6V6Zm8 0 6 6-6 6V6Z" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "captions" && <path d="M5 6.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 16V8A1.5 1.5 0 0 1 5 6.5Zm2.5 4h3m-3 3h5m3.5 0h.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />}
-      {name === "more" && <path d="M6.5 12h.01M12 12h.01M17.5 12h.01" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />}
-      {name === "volume" && <path d="M4.5 9.5h3.2L12 6v12l-4.3-3.5H4.5v-5Zm10.4-.8a5 5 0 0 1 0 6.6m2.6-9.2a9 9 0 0 1 0 11.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
-      {name === "music" && <path d="M9 18.5a2.5 2.5 0 1 1-1.2-2.1V6.5l9-2v10a2.5 2.5 0 1 1-1.4-2.2V8.1l-6.2 1.4v9Z" fill="currentColor" />}
-      {name === "settings" && <path d="M12 8.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6Zm0-4 .9 2.1 2.2.6 1.9-1.2 1.3 1.3-1.2 1.9.6 2.2 2.1.9v1.8l-2.1.9-.6 2.2 1.2 1.9-1.3 1.3-1.9-1.2-2.2.6-.9 2.1h-1.8l-.9-2.1-2.2-.6-1.9 1.2-1.3-1.3 1.2-1.9-.6-2.2-2.1-.9V12l2.1-.9.6-2.2L3.9 7l1.3-1.3 1.9 1.2 2.2-.6.9-2.1H12Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />}
-    </svg>
-  );
-}
 
 export function DetailView({
   payload,
@@ -191,7 +166,7 @@ export function DetailView({
   return (
     <div className="detail-page">
       <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label={t("common.back")}>
-        <SvgIcon name="back" />
+        <UiIcon name="chevron-left" />
       </button>
       <section className="hero" style={bg(item.backdropUrl ?? item.primaryImageUrl)}>
         <div className="hero-copy">
@@ -213,14 +188,14 @@ export function DetailView({
           ) : null}
           <div className="hero-actions">
             <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
-              <SvgIcon name="play" />
+              <UiIcon name="play" />
               <span>{t("detail.play")}</span>
             </button>
             <button className="mark-round" onClick={() => void mark("mark_favorite", !item.favorite)} title={item.favorite ? t("detail.favorited") : t("detail.favorite")}>
-              <SvgIcon name="heart" />
+              <UiIcon name="heart" />
             </button>
             <button className="mark-text" onClick={() => void mark("mark_played", !item.played)}>
-              <SvgIcon name="check" />
+              <UiIcon name="check" />
               <span>{item.played ? t("detail.watched") : t("detail.markWatched")}</span>
             </button>
             {collectionLike && (
@@ -247,7 +222,7 @@ export function DetailView({
                   <div className={`season-switcher ${seasonPickerOpen ? "open" : ""}`} onMouseEnter={keepSeasonPickerOpen} onMouseLeave={closeSeasonPickerSoon}>
                     <button className={`season-toggle ${seasonChanged ? "changed" : ""}`} onAnimationEnd={() => setSeasonChanged(false)} onClick={() => setSeasonPickerOpen((open) => !open)}>
                       <span>{currentSeason?.name ?? t("detail.season")}</span>
-                      <SvgIcon name="next" />
+                      <UiIcon name="chevron-right" />
                     </button>
                     {seasonPickerOpen && (
                       <div className="season-menu">
@@ -316,7 +291,7 @@ export function DetailView({
       {detailPicker && selectedSource && (
         <div className="modal-backdrop">
           <div className="source-modal">
-            <button className="close" onClick={() => setDetailPicker(null)} title={t("common.close")}><SvgIcon name="close" /></button>
+            <button className="close" onClick={() => setDetailPicker(null)} title={t("common.close")}><UiIcon name="x" /></button>
             <h2>{pickerTitle(detailPicker)}</h2>
             <div className="source-list">
               {detailPicker === "source" && currentMediaSources.map((source, index) => (
@@ -419,6 +394,20 @@ function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
   return [source.resolution, source.videoRange, source.bitDepth ? `${source.bitDepth}bit` : ""].filter(Boolean).join(" ") || source.videoDisplayTitle || i18n.t("detail.originalQuality");
 }
 
+function formatLoadSpeed(bytesPerSecond?: number | null) {
+  const speed = bytesPerSecond ?? 0;
+  if (!Number.isFinite(speed) || speed <= 0) return "0 KB/s";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let value = speed;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : value < 10 ? 1 : 0;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
 function qualityFacts(source: ItemDetailPayload["mediaSources"][number]) {
   return [
     source.videoDisplayTitle,
@@ -514,7 +503,7 @@ export function PlayerView({
   const onPlayNextRef = useRef(onPlayNext);
   const selectedAudio = currentSource?.audioStreams.find((stream) => stream.index === audioIndex) ?? currentSource?.audioStreams[0];
   const selectedSubtitle = currentSource?.subtitleStreams.find((stream) => stream.index === subtitleIndex) ?? currentSource?.subtitleStreams[0];
-  const statusLabel = ready ? (state?.paused ? t("player.paused") : t("player.playing")) : t("player.initializing");
+  const statusLabel = ready ? (state?.paused ? t("player.paused") : t("player.loadingSpeed", { speed: formatLoadSpeed(state?.cacheSpeed) })) : t("player.initializing");
   const currentTimeLabel = duration ? formatTime(time) : "0:00";
   const durationLabel = duration ? formatTime(duration) : "0:00";
 
@@ -613,7 +602,7 @@ export function PlayerView({
     <div className={`player-page ${ready ? "ready" : ""} ${visible || menu ? "" : "controls-hidden"}`} onMouseMove={showControls} onPointerDown={showControls}>
       <div className="player-drag-region" data-tauri-drag-region />
       <div className="player-top">
-        <button className="player-round player-back" onClick={onExit} aria-label={t("common.back")}><SvgIcon name="back" /></button>
+        <button className="player-round player-back" onClick={onExit} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
         <div className="player-title-stack" data-tauri-drag-region>
           <strong>{title}</strong>
           <span>{currentSource ? qualityLabel(currentSource) : t("player.playingTitle")}</span>
@@ -621,9 +610,9 @@ export function PlayerView({
         <div className="player-top-spacer" data-tauri-drag-region />
         <div className="player-state-pill">{statusLabel}</div>
         <div className="player-window-actions">
-          <button className="icon-btn" onClick={onMinimize} title={t("topbar.minimize")}><SvgIcon name="min" /></button>
-          <button className="icon-btn" onClick={onToggleMaximize} title={t("topbar.maximize")}><SvgIcon name="max" /></button>
-          <button className="icon-btn" onClick={onClose} title={t("common.close")}><SvgIcon name="close" /></button>
+          <button className="icon-btn" onClick={onMinimize} title={t("topbar.minimize")}><UiIcon name="minus" /></button>
+          <button className="icon-btn" onClick={onToggleMaximize} title={t("topbar.maximize")}><UiIcon name="square" /></button>
+          <button className="icon-btn" onClick={onClose} title={t("common.close")}><UiIcon name="x" /></button>
         </div>
       </div>
       {!ready && (
@@ -633,7 +622,7 @@ export function PlayerView({
         </div>
       )}
       <aside className="player-volume-rail">
-        <button className="player-round" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? t("player.unmute") : t("player.mute")}><SvgIcon name="volume" /></button>
+        <button className="player-round" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? t("player.unmute") : t("player.mute")}><UiIcon name="volume" /></button>
         <input
           type="range"
           min="0"
@@ -646,11 +635,11 @@ export function PlayerView({
       </aside>
       <div className="player-bottom">
         <div className="player-main-actions">
-          <button className="player-round" disabled={!canPlayPrevious} onClick={() => void onPlayPrevious()} aria-label={t("player.previousEpisode")}><SvgIcon name="previous" /></button>
-          <button className="player-round seek-back" onClick={() => void onCommand("seek_back")} aria-label={t("player.seekBack", { seconds: seekBackSeconds })} title={t("player.seekBack", { seconds: seekBackSeconds })}><SvgIcon name="rewind" /></button>
-          <button className="player-round pause-toggle" onClick={() => void onCommand("toggle_pause")} aria-label={t("player.pauseResume")}><SvgIcon name={state?.paused ? "play" : "pause"} /></button>
-          <button className="player-round seek-forward" onClick={() => void onCommand("seek_forward")} aria-label={t("player.seekForward", { seconds: seekForwardSeconds })} title={t("player.seekForward", { seconds: seekForwardSeconds })}><SvgIcon name="forward" /></button>
-          <button className="player-round" disabled={!canPlayNext} onClick={() => void onPlayNext()} aria-label={t("player.nextEpisode")}><SvgIcon name="next" /></button>
+          <button className="player-round" disabled={!canPlayPrevious} onClick={() => void onPlayPrevious()} aria-label={t("player.previousEpisode")}><UiIcon name="skip-back" /></button>
+          <button className="player-round seek-back" onClick={() => void onCommand("seek_back")} aria-label={t("player.seekBack", { seconds: seekBackSeconds })} title={t("player.seekBack", { seconds: seekBackSeconds })}><UiIcon name="rewind" /></button>
+          <button className="player-round pause-toggle" onClick={() => void onCommand("toggle_pause")} aria-label={t("player.pauseResume")}><UiIcon name={state?.paused ? "play" : "pause"} /></button>
+          <button className="player-round seek-forward" onClick={() => void onCommand("seek_forward")} aria-label={t("player.seekForward", { seconds: seekForwardSeconds })} title={t("player.seekForward", { seconds: seekForwardSeconds })}><UiIcon name="fast-forward" /></button>
+          <button className="player-round" disabled={!canPlayNext} onClick={() => void onPlayNext()} aria-label={t("player.nextEpisode")}><UiIcon name="skip-forward" /></button>
         </div>
         <div className="player-progress-row">
           <span>{currentTimeLabel}</span>
@@ -669,11 +658,11 @@ export function PlayerView({
           <span>{durationLabel}</span>
         </div>
         <div className="player-secondary-actions">
-          <button className={`player-round ${menu === "audio" ? "active" : ""}`} onClick={() => setMenu(menu === "audio" ? null : "audio")} aria-label={t("player.audio")}><SvgIcon name="music" /></button>
-          <button className={`player-round ${menu === "subtitle" ? "active" : ""}`} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")} aria-label={t("player.captions")}><SvgIcon name="captions" /></button>
-          <button className="player-round" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? t("player.unmute") : t("player.mute")}><SvgIcon name="volume" /></button>
-          <button className={`player-round ${menu === "settings" ? "active" : ""}`} onClick={() => setMenu(menu === "settings" ? null : "settings")} aria-label={t("player.settings")}><SvgIcon name="settings" /></button>
-          <button className="player-round fullscreen-toggle" onClick={onToggleFullscreen} aria-label={t("player.fullscreen")}><SvgIcon name="fullscreen" /></button>
+          <button className={`player-round ${menu === "audio" ? "active" : ""}`} onClick={() => setMenu(menu === "audio" ? null : "audio")} aria-label={t("player.audio")}><UiIcon name="music" /></button>
+          <button className={`player-round ${menu === "subtitle" ? "active" : ""}`} onClick={() => setMenu(menu === "subtitle" ? null : "subtitle")} aria-label={t("player.captions")}><UiIcon name="captions" /></button>
+          <button className="player-round" onClick={() => void onCommand("toggle_mute")} aria-label={state?.muted ? t("player.unmute") : t("player.mute")}><UiIcon name="volume" /></button>
+          <button className={`player-round ${menu === "settings" ? "active" : ""}`} onClick={() => setMenu(menu === "settings" ? null : "settings")} aria-label={t("player.settings")}><UiIcon name="settings" /></button>
+          <button className="player-round fullscreen-toggle" onClick={onToggleFullscreen} aria-label={t("player.fullscreen")}><UiIcon name="fullscreen" /></button>
         </div>
         {menu === "settings" && (
           <div className="player-option-grid player-settings-panel" onMouseEnter={() => window.clearTimeout(hideTimer.current)}>

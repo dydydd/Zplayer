@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
+import { UiIcon } from "./icons";
 
 type TopBarProps = {
   searchOpen: boolean;
@@ -33,10 +34,18 @@ export function TopBar({
           />
         </label>
       )}
-      <button className="icon-btn search-btn" title={t("topbar.search")} onClick={onToggleSearch} />
-      <button className="icon-btn min-btn" title={t("topbar.minimize")} onClick={() => void getCurrentWindow().minimize()} />
-      <button className="icon-btn max-btn" title={t("topbar.maximize")} onClick={() => void getCurrentWindow().toggleMaximize()} />
-      <button className="icon-btn close-btn" title={t("common.close")} onClick={() => void getCurrentWindow().close()} />
+      <button className="icon-btn search-btn" title={t("topbar.search")} onClick={onToggleSearch}>
+        <UiIcon name="search" />
+      </button>
+      <button className="icon-btn min-btn" title={t("topbar.minimize")} onClick={() => void getCurrentWindow().minimize()}>
+        <UiIcon name="minus" />
+      </button>
+      <button className="icon-btn max-btn" title={t("topbar.maximize")} onClick={() => void getCurrentWindow().toggleMaximize()}>
+        <UiIcon name="square" />
+      </button>
+      <button className="icon-btn close-btn" title={t("common.close")} onClick={() => void getCurrentWindow().close()}>
+        <UiIcon name="x" />
+      </button>
     </header>
   );
 }

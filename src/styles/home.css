@@ -16,7 +16,9 @@
   align-items: end;
   padding: clamp(112px, 14vh, 132px) var(--page-pad) clamp(28px, 5vh, 44px);
   border-radius: 0;
-  background-color: #181818;
+  background:
+    linear-gradient(135deg, rgba(44, 48, 58, 0.92), rgba(18, 20, 26, 0.96)),
+    #181818;
   background-position: center;
   background-size: cover;
   text-align: left;
@@ -31,7 +33,9 @@
   object-fit: cover;
   pointer-events: none;
   opacity: 0;
+  background: #181818;
   transition: opacity 0.22s var(--tv-ease);
+  will-change: opacity;
 }
 
 .feature-art.active {
@@ -240,98 +244,18 @@
   position: relative;
 }
 
-.icon-btn::before,
-.icon-btn::after,
-.round-icon::before,
-.play-icon::before,
-.play-glyph::before {
-  display: block;
-  content: "";
-}
-
-.icon-btn::before,
-.icon-btn::after {
-  grid-area: 1 / 1;
-}
-
-.search-btn::before {
-  width: 11px;
-  height: 11px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-}
-
-.search-btn::after {
-  width: 8px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  transform: translate(7px, 7px) rotate(45deg);
-}
-
-.min-btn::before {
-  width: 14px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.max-btn::before {
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-}
-
-.close-btn::before {
-  width: 16px;
-  height: 16px;
-  background:
-    linear-gradient(45deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%),
-    linear-gradient(-45deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%);
-}
-
-.play-icon::before,
-.play-glyph::before {
-  width: 0;
-  height: 0;
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-left: 13px solid currentColor;
-  margin-left: 3px;
-}
-
 .play-glyph {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
+  font-size: 22px;
 }
 
-.info-icon::before {
-  width: 18px;
-  height: 18px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background:
-    linear-gradient(currentColor, currentColor) center 7px / 2px 7px no-repeat,
-    radial-gradient(circle at center 4px, currentColor 0 1.5px, transparent 2px);
+.home-icon .ui-icon,
+.round-icon .ui-icon,
+.topbar .icon-btn .ui-icon {
+  font-size: 20px;
 }
 
-.add-icon::before {
-  width: 18px;
-  height: 18px;
-  background:
-    linear-gradient(currentColor, currentColor) center / 18px 2px no-repeat,
-    linear-gradient(currentColor, currentColor) center / 2px 18px no-repeat;
-}
-
-.next-icon::before {
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  transform: rotate(45deg);
+.feature-actions .round-icon .ui-icon {
+  font-size: 22px;
 }
 
 .hero-dots {
@@ -376,8 +300,7 @@
 
 .home-shelf {
   min-width: 0;
-  content-visibility: auto;
-  contain-intrinsic-size: 1px 390px;
+  contain: layout paint style;
 }
 
 .home-shelf .media-row {
@@ -442,11 +365,7 @@
 }
 
 .enter-arrow {
-  width: 11px;
-  height: 11px;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  transform: rotate(45deg);
+  font-size: 18px;
 }
 
 .shelf-actions {
@@ -480,20 +399,8 @@
   place-items: center;
 }
 
-.shelf-arrow::before {
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  content: "";
-}
-
-.shelf-arrow.left::before {
-  transform: translateX(2px) rotate(-45deg);
-}
-
-.shelf-arrow.right::before {
-  transform: translateX(-2px) rotate(135deg);
+.shelf-arrow .ui-icon {
+  font-size: 20px;
 }
 
 .row-stage {
@@ -546,20 +453,8 @@
   right: var(--page-pad);
 }
 
-.row-float-arrow::before {
-  width: 12px;
-  height: 12px;
-  border-top: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  content: "";
-}
-
-.row-float-arrow.left::before {
-  transform: translateX(3px) rotate(-45deg);
-}
-
-.row-float-arrow.right::before {
-  transform: translateX(-3px) rotate(135deg);
+.row-float-arrow .ui-icon {
+  font-size: 24px;
 }
 
 .row-float-arrow:hover,
@@ -577,7 +472,9 @@
   overflow: hidden;
   border-radius: 8px;
   background-clip: padding-box;
-  background: #1d1d1f;
+  background:
+    linear-gradient(135deg, rgba(58, 63, 74, 0.72), rgba(24, 26, 32, 0.98)),
+    #1d1d1f;
   text-align: left;
   transform-origin: center;
   transition:
@@ -610,6 +507,9 @@
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(58, 63, 74, 0.72), rgba(24, 26, 32, 0.98)),
+    #1d1d1f;
   object-fit: cover;
 }
 

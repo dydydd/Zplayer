@@ -121,6 +121,7 @@ const DISABLE_MPV_UI_OPTIONS: &[(&str, &str)] = &[
     ("osd-level", "0"),
 ];
 const MPV_ENGINE_OPTIONS: &[(&str, &str)] = &[("keep-open", "no")];
+const MPV_ACCELERATION_OPTIONS: &[(&str, &str)] = &[("hwdec", "auto-safe")];
 const MPV_SYNC_START_OPTIONS: &[(&str, &str)] = &[("pause", "yes")];
 const MPV_LOG_LEVEL: &str = "all=warn";
 
@@ -605,6 +606,9 @@ impl MpvSession {
             .get_double_locked("volume")
             .map(|volume| volume.round().clamp(0.0, 100.0) as i32);
         let speed = self.get_double_locked("speed");
+        let cache_speed = self
+            .get_double_locked("cache-speed")
+            .filter(|speed| speed.is_finite() && *speed >= 0.0);
         let video_ready = self
             .get_i64_locked("dwidth")
             .zip(self.get_i64_locked("dheight"))
@@ -618,6 +622,7 @@ impl MpvSession {
             muted,
             volume,
             speed,
+            cache_speed,
             video_ready,
         })
     }
@@ -921,6 +926,9 @@ fn configure_session(
         session.set_option(name, value)?;
     }
     for (name, value) in MPV_ENGINE_OPTIONS {
+        session.set_option(name, value)?;
+    }
+    for (name, value) in MPV_ACCELERATION_OPTIONS {
         session.set_option(name, value)?;
     }
     for (name, value) in MPV_SYNC_START_OPTIONS {
@@ -1809,10 +1817,11 @@ mod tests {
         .unwrap();
         assert!(state.video_ready);
         let state = parse_state(
-            r#"{"timePos":12.5,"duration":120.0,"paused":false,"muted":true,"volume":42,"videoReady":true,"speed":1.25}"#,
+            r#"{"timePos":12.5,"duration":120.0,"paused":false,"muted":true,"volume":42,"videoReady":true,"speed":1.25,"cacheSpeed":1048576.0}"#,
         )
         .unwrap();
         assert_eq!(state.speed, Some(1.25));
+        assert_eq!(state.cache_speed, Some(1_048_576.0));
     }
 
     #[test]
@@ -1888,6 +1897,7 @@ mod tests {
             muted: true,
             volume: Some(55),
             speed: Some(1.0),
+            cache_speed: Some(512.0),
             video_ready: true,
         };
 
@@ -1899,6 +1909,7 @@ mod tests {
         assert_eq!(cached.paused, state.paused);
         assert_eq!(cached.muted, state.muted);
         assert_eq!(cached.volume, state.volume);
+        assert_eq!(cached.cache_speed, state.cache_speed);
         assert_eq!(cached.video_ready, state.video_ready);
         forget_control(session_id);
     }
@@ -1915,6 +1926,7 @@ mod tests {
                 muted: false,
                 volume: Some(100),
                 speed: Some(1.0),
+                cache_speed: None,
                 video_ready: false,
             },
         );
@@ -2009,6 +2021,11 @@ mod tests {
     #[test]
     fn runs_libmpv_as_playback_engine() {
         assert!(MPV_ENGINE_OPTIONS.contains(&("keep-open", "no")));
+    }
+
+    #[test]
+    fn enables_safe_hardware_decoding_when_available() {
+        assert!(MPV_ACCELERATION_OPTIONS.contains(&("hwdec", "auto-safe")));
     }
 
     #[test]

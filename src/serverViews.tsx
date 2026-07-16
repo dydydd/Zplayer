@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { UiIcon } from "./icons";
 import type { AppLanguage, AppSettings, LinuxWindowDiagnostics, PlayResult, SavedServer } from "./types";
 import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 
@@ -24,7 +25,7 @@ export function ServerView({
 
   return (
     <div className="page narrow server-page">
-      <button className="back" onClick={onBack} aria-label={t("common.back")} />
+      <button className="back" onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
       <div className="server-heading">
         <div>
           <span className="eyebrow">{t("server.eyebrow")}</span>
@@ -42,7 +43,7 @@ export function ServerView({
             className={`server-card ${server.active ? "active" : ""}`}
             onClick={() => void onActivate(server.id)}
           >
-            <span className="server-logo play-icon" />
+            <span className="server-logo"><UiIcon name="server" /></span>
             <div className="server-main">
               <div className="server-card-title">
                 <h3>{server.name}</h3>
@@ -131,7 +132,7 @@ export function SettingsView({
 
   return (
     <div className="page narrow settings-page">
-      <button className="back" onClick={onBack} aria-label={t("common.back")} />
+      <button className="back" onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
       <span className="eyebrow">{t("settings.eyebrow")}</span>
       <h1>{t("settings.title")}</h1>
       <section className="settings-grid">

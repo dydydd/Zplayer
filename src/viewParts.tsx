@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem } from "./types";
+import { UiIcon } from "./icons";
 import { itemMeta } from "./media";
 
 export function useFloatingBackVisible(resetKey: string) {
@@ -75,7 +76,7 @@ export function ShelfHeader({
   const titleContent = (
     <>
       {title}
-      {libraryId && onOpenLibrary && <span className="enter-arrow" aria-hidden="true" />}
+      {libraryId && onOpenLibrary && <UiIcon name="chevron-right" className="enter-arrow" />}
     </>
   );
 
@@ -90,8 +91,8 @@ export function ShelfHeader({
       )}
       {showControls && (
         <div className="shelf-actions">
-          <button className="shelf-arrow left" onClick={onScrollLeft} aria-label={t("parts.scrollLeft")} />
-          <button className="shelf-arrow right" onClick={onScrollRight} aria-label={t("parts.scrollRight")} />
+          <button className="shelf-arrow left" onClick={onScrollLeft} aria-label={t("parts.scrollLeft")}><UiIcon name="chevron-left" /></button>
+          <button className="shelf-arrow right" onClick={onScrollRight} aria-label={t("parts.scrollRight")}><UiIcon name="chevron-right" /></button>
         </div>
       )}
     </div>
@@ -165,11 +166,11 @@ export function ScrollableStage({
 
   return (
     <div className={`row-stage ${className}`}>
-      {floatingControls && canScrollLeft && <button className="row-float-arrow left" onClick={() => scrollByPage(-1)} aria-label={t("parts.scrollLeft")} />}
+      {floatingControls && canScrollLeft && <button className="row-float-arrow left" onClick={() => scrollByPage(-1)} aria-label={t("parts.scrollLeft")}><UiIcon name="chevron-left" /></button>}
       <div className={rowClassName} ref={rowRef} onMouseEnter={updateScrollState}>
         {children}
       </div>
-      {floatingControls && canScrollRight && <button className="row-float-arrow right" onClick={() => scrollByPage(1)} aria-label={t("parts.scrollRight")} />}
+      {floatingControls && canScrollRight && <button className="row-float-arrow right" onClick={() => scrollByPage(1)} aria-label={t("parts.scrollRight")}><UiIcon name="chevron-right" /></button>}
     </div>
   );
 }
@@ -208,6 +209,16 @@ export const Poster = memo(function Poster({
   );
 });
 
-export function Image({ src, alt }: { src?: string | null; alt: string }) {
-  return src ? <img src={src} alt={alt} loading="lazy" decoding="async" /> : <div className="image-fallback">{alt.slice(0, 2)}</div>;
+export function Image({
+  src,
+  alt,
+  loading = "lazy",
+  fetchPriority = "auto",
+}: {
+  src?: string | null;
+  alt: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+}) {
+  return src ? <img src={src} alt={alt} loading={loading} decoding="async" fetchPriority={fetchPriority} /> : <div className="image-fallback">{alt.slice(0, 2)}</div>;
 }

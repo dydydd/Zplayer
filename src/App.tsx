@@ -38,6 +38,7 @@ function samePlaybackState(left: PlaybackState | null, right: PlaybackState | nu
     && left?.muted === right?.muted
     && left?.volume === right?.volume
     && left?.speed === right?.speed
+    && left?.cacheSpeed === right?.cacheSpeed
     && left?.videoReady === right?.videoReady;
 }
 

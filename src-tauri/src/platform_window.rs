@@ -52,7 +52,7 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
     {
         std::env::set_var("GDK_BACKEND", "wayland");
         std::env::set_var("WINIT_UNIX_BACKEND", "wayland");
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        std::env::remove_var("WEBKIT_DISABLE_DMABUF_RENDERER");
         std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE");
         let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
         if !is_wayland_display_set(wayland_display.as_deref()) {
@@ -63,6 +63,11 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn webkit_hardware_acceleration_policy() -> webkit2gtk::HardwareAccelerationPolicy {
+    webkit2gtk::HardwareAccelerationPolicy::Always
 }
 
 pub(crate) fn create_main_window<R: Runtime>(
@@ -93,7 +98,7 @@ fn install_native_video_overlay<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use gtk::prelude::*;
-    use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
+    use webkit2gtk::{SettingsExt, WebViewExt};
 
     let webview_window = window.clone();
     let container_window = window.clone();
@@ -120,11 +125,17 @@ fn install_native_video_overlay<R: Runtime>(
         video_area.set_vexpand(true);
         video_area.set_auto_render(false);
         video_area.set_has_alpha(false);
+        video_area.connect_realize(|area| {
+            area.queue_render();
+        });
+        video_area.connect_resize(|area, _width, _height| {
+            area.queue_render();
+        });
         video_area.connect_render(|area, _context| handle_native_video_render(area));
         webview.set_app_paintable(true);
         webview.set_background_color(&transparent);
         if let Some(settings) = WebViewExt::settings(&webview) {
-            settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Never);
+            settings.set_hardware_acceleration_policy(webkit_hardware_acceleration_policy());
         }
         gtk_window.set_app_paintable(true);
         if let Some(visual) =
@@ -141,11 +152,13 @@ fn install_native_video_overlay<R: Runtime>(
         overlay.set_overlay_pass_through(&webview, false);
         gtk_window.remove(&container);
         gtk_window.add(&overlay);
+        let native_video_area = video_area.clone();
         NATIVE_VIDEO_AREA.with(|stored| {
-            *stored.borrow_mut() = Some(video_area);
+            *stored.borrow_mut() = Some(native_video_area);
         });
         let _ = NATIVE_VIDEO_THREAD.set(std::thread::current().id());
         gtk_window.show_all();
+        video_area.queue_render();
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
     Ok(())
@@ -313,5 +326,14 @@ mod tests {
     #[test]
     fn diagnostics_keep_window_transparent_for_native_video() {
         assert!(!diagnostics().opaque_window);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_webkit_hardware_acceleration_stays_enabled() {
+        assert!(matches!(
+            webkit_hardware_acceleration_policy(),
+            webkit2gtk::HardwareAccelerationPolicy::Always
+        ));
     }
 }

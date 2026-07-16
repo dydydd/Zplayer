@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { LibraryFilters, LibraryItemType, LibraryPayload, LibraryPlayedFilter, LibrarySortBy, LibrarySortOrder, MediaItem, PosterDensity } from "./types";
+import { UiIcon } from "./icons";
 import { EmptyState, Poster, useFloatingBackVisible } from "./viewParts";
 
 export function LibraryView({
@@ -81,7 +82,7 @@ export function LibraryView({
 
   return (
     <div className="page library-page">
-      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label={t("common.back")} />
+      <button className={`back floating-back ${backVisible ? "" : "hidden"}`} onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
       <div className="library-heading">
         <h1>{title ?? payload.library.name}</h1>
         <div className="filters">
@@ -139,7 +140,7 @@ function FilterMenu<T extends string>({
     <div className={`filter-menu ${open ? "open" : ""}`} ref={ref}>
       <button className="filter-menu-trigger" type="button" aria-label={`${label}: ${selected.label}`} aria-expanded={open} onClick={() => setOpen((current) => !current)}>
         <strong>{selected.label}</strong>
-        <i />
+        <UiIcon name="chevron-right" className="filter-menu-chevron" />
       </button>
       {open && (
         <div className="filter-menu-popover">

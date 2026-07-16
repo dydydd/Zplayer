@@ -63,6 +63,20 @@ button {
   padding: 0;
 }
 
+.ui-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {

@@ -139,13 +139,10 @@
   white-space: nowrap;
 }
 
-.filter-menu-trigger i {
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+.filter-menu-chevron {
+  font-size: 16px;
   opacity: 0.72;
-  transform: translateY(-2px) rotate(45deg);
+  transform: rotate(90deg);
 }
 
 .filter-menu.open .filter-menu-trigger,

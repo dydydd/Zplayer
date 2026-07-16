@@ -1,9 +1,14 @@
 ﻿import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HomePayload, MediaItem, SavedServer } from "./types";
+import { UiIcon } from "./icons";
 import { bg, itemMeta } from "./media";
 import { rotateDaily } from "./viewLogic";
 import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
+
+const HOME_PRELOAD_IMAGE_LIMIT = 48;
+const HOME_ROW_EAGER_IMAGES = 4;
+const HERO_ROW_EAGER_IMAGES = 8;
 
 export function HomeView({
   home,
@@ -38,7 +43,9 @@ export function HomeView({
 }) {
   const { t } = useTranslation();
   const [heroIndex, setHeroIndex] = useState(0);
+  const [visibleFeaturedImage, setVisibleFeaturedImage] = useState<string | null | undefined>(undefined);
   const longPressTimer = useRef<number | null>(null);
+  const preloadedImages = useRef<HTMLImageElement[]>([]);
   const heroItems = useMemo(() => {
     const recommended = [...(home?.recommendedMovies ?? []), ...(home?.recommendedShows ?? [])];
     return rotateDaily(
@@ -63,6 +70,46 @@ export function HomeView({
   useEffect(() => {
     setHeroIndex(0);
   }, [home?.server.id]);
+
+  useEffect(() => {
+    if (!featuredImage) {
+      setVisibleFeaturedImage(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    const image = new window.Image();
+    const showImage = () => {
+      if (!cancelled) setVisibleFeaturedImage(featuredImage);
+    };
+
+    image.decoding = "async";
+    image.onload = showImage;
+    image.onerror = showImage;
+    image.src = featuredImage;
+    if (image.complete) showImage();
+
+    return () => {
+      cancelled = true;
+      image.onload = null;
+      image.onerror = null;
+    };
+  }, [featuredImage]);
+
+  useEffect(() => {
+    if (!home) {
+      preloadedImages.current = [];
+      return;
+    }
+
+    preloadedImages.current = collectHomePreloadUrls(home, heroItems).map((src) => {
+      const image = new window.Image();
+      image.decoding = "async";
+      image.loading = "eager";
+      image.src = src;
+      return image;
+    });
+  }, [heroItems, home]);
 
   useEffect(() => {
     if (heroItems.length < 2) {
@@ -98,7 +145,7 @@ export function HomeView({
           }}
           title={t("home.serverSwitchTitle")}
         >
-          <span className="home-icon play-icon" />
+          <span className="home-icon"><UiIcon name="server" /></span>
           {activeServer.name}
         </button>
         {serverMenuOpen && (
@@ -135,21 +182,21 @@ export function HomeView({
         )}
       </div>
       <section className="feature-banner">
-        {featuredImage && <img key={featured?.id} className="feature-art active" src={featuredImage} alt="" loading="eager" decoding="async" />}
+        {visibleFeaturedImage && <img key={visibleFeaturedImage} className="feature-art active" src={visibleFeaturedImage} alt="" loading="eager" decoding="async" fetchPriority="high" />}
         {featured && (
           <div key={featured.id} className="feature-copy">
             {featured.logoUrl ? (
-              <img className="feature-logo" src={featured.logoUrl} alt={featured.name} />
+              <img className="feature-logo" src={featured.logoUrl} alt={featured.name} loading="eager" decoding="async" fetchPriority="high" />
             ) : (
               <strong>{featured.name}</strong>
             )}
             <small>{itemMeta(featured)}</small>
             {featured.overview && <p>{featured.overview}</p>}
             <div className="feature-actions">
-              <button className="feature-play" onClick={() => void onPlay(featured.id)}><span className="play-glyph" />{t("home.play")}</button>
-              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label={t("home.detail")} />
-              <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label={t("home.openFavorites")} />
-              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label={t("home.nextRecommendation")} />
+              <button className="feature-play" onClick={() => void onPlay(featured.id)}><UiIcon name="play" className="play-glyph" />{t("home.play")}</button>
+              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label={t("home.detail")}><UiIcon name="info" /></button>
+              <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label={t("home.openFavorites")}><UiIcon name="heart" /></button>
+              <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label={t("home.nextRecommendation")}><UiIcon name="chevron-right" /></button>
             </div>
           </div>
         )}
@@ -169,6 +216,7 @@ export function HomeView({
             onOpenItem={onOpenItem}
             className="hero-shelf"
             showProgress
+            eagerImageCount={HERO_ROW_EAGER_IMAGES}
           />
       </section>
       {home && !home.resumeItems.length && !home.libraries.length && !home.libraryLatest.length && (
@@ -188,6 +236,7 @@ export function HomeView({
             onOpenLibrary={onOpenLibrary}
             floatingControls
             poster
+            eagerImageCount={HOME_ROW_EAGER_IMAGES}
           />
         ))}
       </div>
@@ -228,6 +277,7 @@ const MediaShelf = memo(function MediaShelf({
   floatingControls = true,
   poster = false,
   showProgress = false,
+  eagerImageCount = 0,
 }: {
   title: string;
   items: MediaItem[];
@@ -238,6 +288,7 @@ const MediaShelf = memo(function MediaShelf({
   floatingControls?: boolean;
   poster?: boolean;
   showProgress?: boolean;
+  eagerImageCount?: number;
 }) {
   if (!items.length) return null;
 
@@ -250,9 +301,14 @@ const MediaShelf = memo(function MediaShelf({
         showControls={!floatingControls}
       />
       <ScrollableStage rowClassName="media-row" itemCount={items.length} floatingControls={floatingControls} scrollKey={`home:${libraryId ?? title}`}>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <button key={item.id} className={`apple-card ${poster ? "poster-card" : ""} ${showProgress ? "with-progress" : ""}`} onClick={() => onOpenItem(item.id)}>
-              <Image src={poster ? item.primaryImageUrl : item.backdropUrl ?? item.primaryImageUrl} alt={item.name} />
+              <Image
+                src={poster ? item.primaryImageUrl : item.backdropUrl ?? item.primaryImageUrl}
+                alt={item.name}
+                loading={index < eagerImageCount ? "eager" : "lazy"}
+                fetchPriority={index < Math.min(eagerImageCount, 4) ? "high" : "auto"}
+              />
               {item.communityRating && <span className="score">{item.communityRating.toFixed(1)}</span>}
               <strong>{item.name}</strong>
               {showProgress && <ProgressBar item={item} />}
@@ -262,6 +318,29 @@ const MediaShelf = memo(function MediaShelf({
     </section>
   );
 });
+
+function collectHomePreloadUrls(home: HomePayload, heroItems: MediaItem[]) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const add = (url?: string | null) => {
+    if (!url || seen.has(url) || urls.length >= HOME_PRELOAD_IMAGE_LIMIT) return;
+    seen.add(url);
+    urls.push(url);
+  };
+
+  heroItems.slice(0, 7).forEach((item) => {
+    add(item.backdropUrl ?? item.primaryImageUrl);
+    add(item.logoUrl);
+  });
+  home.latest.slice(0, 4).forEach((item) => add(item.backdropUrl ?? item.primaryImageUrl));
+  home.resumeItems.slice(0, 10).forEach((item) => add(item.backdropUrl ?? item.primaryImageUrl));
+  home.libraries.slice(0, 8).forEach((library) => add(library.imageUrl));
+  home.libraryLatest.slice(0, 5).forEach((row, rowIndex) => {
+    row.items.slice(0, rowIndex < 2 ? 8 : 4).forEach((item) => add(item.primaryImageUrl ?? item.backdropUrl));
+  });
+
+  return urls;
+}
 
 function ProgressBar({ item }: { item: MediaItem }) {
   const percent = item.playedPercentage ?? (

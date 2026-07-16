@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { UiIcon } from "./icons";
 import type { LoginResult, ServerForm } from "./types";
 
 type ServerModalProps = {
@@ -38,7 +39,7 @@ export function ServerModal({
         }}
       >
         <button type="button" className="close" onClick={onClose} title={t("common.close")}>
-          x
+          <UiIcon name="x" />
         </button>
         <h2>{editingServerId ? t("modal.editTitle") : t("modal.addTitle")}</h2>
         <label>
