@@ -179,7 +179,40 @@ pub(crate) struct LibraryItemsQuery<'a> {
     pub(crate) filters: &'a LibraryQueryFilters,
 }
 
-fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &LibraryQueryFilters) {
+#[derive(Clone, Copy)]
+enum LibraryParamStyle {
+    Emby,
+    Jellyfin,
+}
+
+impl LibraryParamStyle {
+    fn filters_key(self) -> &'static str {
+        match self {
+            Self::Emby => "Filters",
+            Self::Jellyfin => "filters",
+        }
+    }
+
+    fn genres_key(self) -> &'static str {
+        match self {
+            Self::Emby => "Genres",
+            Self::Jellyfin => "genres",
+        }
+    }
+
+    fn person_ids_key(self) -> &'static str {
+        match self {
+            Self::Emby => "PersonIds",
+            Self::Jellyfin => "personIds",
+        }
+    }
+}
+
+fn append_library_filters(
+    params: &mut Vec<(&'static str, String)>,
+    filters: &LibraryQueryFilters,
+    style: LibraryParamStyle,
+) {
     let mut filter_values = Vec::new();
     if let Some(played) = filters.played {
         filter_values.push(if played { "IsPlayed" } else { "IsUnplayed" });
@@ -188,17 +221,13 @@ fn append_library_filters(params: &mut Vec<(&'static str, String)>, filters: &Li
         filter_values.push("IsFavorite");
     }
     if !filter_values.is_empty() {
-        let value = filter_values.join(",");
-        params.push(("Filters", value.clone()));
-        params.push(("filters", value));
+        params.push((style.filters_key(), filter_values.join(",")));
     }
     if let Some(genre) = filters.genre.as_deref() {
-        params.push(("Genres", genre.to_string()));
-        params.push(("genres", genre.to_string()));
+        params.push((style.genres_key(), genre.to_string()));
     }
     if let Some(person_id) = filters.person_id.as_deref() {
-        params.push(("PersonIds", person_id.to_string()));
-        params.push(("personIds", person_id.to_string()));
+        params.push((style.person_ids_key(), person_id.to_string()));
     }
 }
 
@@ -245,8 +274,12 @@ pub(crate) fn get_library_items(
         emby_params.push(("IncludeItemTypes", item_type.to_string()));
         jellyfin_params.push(("includeItemTypes", item_type.to_string()));
     }
-    append_library_filters(&mut emby_params, query.filters);
-    append_library_filters(&mut jellyfin_params, query.filters);
+    append_library_filters(&mut emby_params, query.filters, LibraryParamStyle::Emby);
+    append_library_filters(
+        &mut jellyfin_params,
+        query.filters,
+        LibraryParamStyle::Jellyfin,
+    );
     get_items_page(client, server, "Users/{user_id}/Items", &emby_params)
         .or_else(|_| get_items_page(client, server, "Items", &jellyfin_params))
 }
@@ -1178,7 +1211,7 @@ mod tests {
     }
 
     #[test]
-    fn library_filters_emit_server_params() {
+    fn library_filters_emit_emby_params() {
         let filters = LibraryQueryFilters {
             played: Some(false),
             favorite: Some(true),
@@ -1187,14 +1220,34 @@ mod tests {
             collection_id: None,
         };
         let mut params = Vec::new();
-        append_library_filters(&mut params, &filters);
+        append_library_filters(&mut params, &filters, LibraryParamStyle::Emby);
 
         assert!(params.contains(&("Filters", "IsUnplayed,IsFavorite".to_string())));
-        assert!(params.contains(&("filters", "IsUnplayed,IsFavorite".to_string())));
         assert!(params.contains(&("Genres", "Drama".to_string())));
-        assert!(params.contains(&("genres", "Drama".to_string())));
         assert!(params.contains(&("PersonIds", "person-1".to_string())));
+        assert!(!params.iter().any(|(key, _)| *key == "filters"));
+        assert!(!params.iter().any(|(key, _)| *key == "genres"));
+        assert!(!params.iter().any(|(key, _)| *key == "personIds"));
+    }
+
+    #[test]
+    fn library_filters_emit_jellyfin_params() {
+        let filters = LibraryQueryFilters {
+            played: Some(false),
+            favorite: Some(true),
+            genre: Some("Drama".to_string()),
+            person_id: Some("person-1".to_string()),
+            collection_id: None,
+        };
+        let mut params = Vec::new();
+        append_library_filters(&mut params, &filters, LibraryParamStyle::Jellyfin);
+
+        assert!(params.contains(&("filters", "IsUnplayed,IsFavorite".to_string())));
+        assert!(params.contains(&("genres", "Drama".to_string())));
         assert!(params.contains(&("personIds", "person-1".to_string())));
+        assert!(!params.iter().any(|(key, _)| *key == "Filters"));
+        assert!(!params.iter().any(|(key, _)| *key == "Genres"));
+        assert!(!params.iter().any(|(key, _)| *key == "PersonIds"));
     }
 
     #[test]
