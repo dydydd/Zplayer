@@ -2,12 +2,15 @@ use serde::Serialize;
 #[cfg(target_os = "linux")]
 use std::cell::RefCell;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
     OnceLock,
 };
 use tauri::Runtime;
 
 static NATIVE_VIDEO_OVERLAY_INSTALLED: AtomicBool = AtomicBool::new(false);
+static NATIVE_VIDEO_RENDER_COUNT: AtomicU64 = AtomicU64::new(0);
+static NATIVE_VIDEO_RENDER_WIDTH: AtomicI32 = AtomicI32::new(0);
+static NATIVE_VIDEO_RENDER_HEIGHT: AtomicI32 = AtomicI32::new(0);
 #[cfg(target_os = "linux")]
 static NATIVE_VIDEO_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
 
@@ -32,6 +35,10 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) wayland_required: bool,
     pub(crate) gdk_backend_wayland: bool,
     pub(crate) native_video_overlay: bool,
+    pub(crate) native_video_render_count: u64,
+    pub(crate) native_video_render_width: i32,
+    pub(crate) native_video_render_height: i32,
+    pub(crate) native_video_render_context: bool,
     pub(crate) opaque_window: bool,
 }
 
@@ -68,6 +75,7 @@ fn install_native_video_overlay<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use gtk::prelude::*;
+    use webkit2gtk::WebViewExt;
 
     let webview_window = window.clone();
     let container_window = window.clone();
@@ -84,15 +92,27 @@ fn install_native_video_overlay<R: Runtime>(
         let webview = webview.inner();
         let overlay = gtk::Overlay::new();
         let video_area = gtk::GLArea::new();
+        let transparent = gtk::gdk::RGBA::new(0.0, 0.0, 0.0, 0.0);
 
         overlay.set_hexpand(true);
         overlay.set_vexpand(true);
+        overlay.set_app_paintable(true);
         video_area.set_widget_name("zplayer-native-video");
         video_area.set_hexpand(true);
         video_area.set_vexpand(true);
         video_area.set_auto_render(false);
         video_area.set_has_alpha(false);
-        video_area.connect_render(|area, _context| crate::mpv::render_native_video(area));
+        video_area.connect_render(|area, _context| handle_native_video_render(area));
+        webview.set_app_paintable(true);
+        webview.set_background_color(&transparent);
+        gtk_window.set_app_paintable(true);
+        if let Some(visual) =
+            gtk::prelude::GtkWindowExt::screen(&gtk_window).and_then(|screen| screen.rgba_visual())
+        {
+            gtk_window.set_visual(Some(&visual));
+            overlay.set_visual(Some(&visual));
+            webview.set_visual(Some(&visual));
+        }
 
         container.remove(&webview);
         overlay.add(&video_area);
@@ -108,6 +128,16 @@ fn install_native_video_overlay<R: Runtime>(
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn handle_native_video_render(area: &gtk::GLArea) -> gtk::glib::Propagation {
+    use gtk::prelude::*;
+
+    NATIVE_VIDEO_RENDER_COUNT.fetch_add(1, Ordering::SeqCst);
+    NATIVE_VIDEO_RENDER_WIDTH.store(area.allocated_width(), Ordering::SeqCst);
+    NATIVE_VIDEO_RENDER_HEIGHT.store(area.allocated_height(), Ordering::SeqCst);
+    crate::mpv::render_native_video(area)
 }
 
 #[cfg(target_os = "linux")]
@@ -140,6 +170,10 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
     let xdg_session_type = std::env::var("XDG_SESSION_TYPE").ok();
     let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
     let gdk_backend = std::env::var("GDK_BACKEND").ok();
+    #[cfg(target_os = "linux")]
+    let native_video_render_context = crate::mpv::native_video_render_context_active();
+    #[cfg(not(target_os = "linux"))]
+    let native_video_render_context = false;
 
     LinuxWindowDiagnostics {
         xdg_session_type,
@@ -149,6 +183,10 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         wayland_required: current_platform() == DesktopPlatform::Linux,
         gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
         native_video_overlay: NATIVE_VIDEO_OVERLAY_INSTALLED.load(Ordering::SeqCst),
+        native_video_render_count: NATIVE_VIDEO_RENDER_COUNT.load(Ordering::SeqCst),
+        native_video_render_width: NATIVE_VIDEO_RENDER_WIDTH.load(Ordering::SeqCst),
+        native_video_render_height: NATIVE_VIDEO_RENDER_HEIGHT.load(Ordering::SeqCst),
+        native_video_render_context,
         gdk_backend,
         opaque_window: false,
     }

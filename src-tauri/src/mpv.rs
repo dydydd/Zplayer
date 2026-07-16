@@ -462,6 +462,7 @@ impl MpvSession {
                     use gtk::prelude::*;
 
                     area.make_current();
+                    area.attach_buffers();
                     let wayland_display = wayland_display_for_gl_area(area)?;
                     let context =
                         session.create_render_context_on_current_thread(wayland_display)?;
@@ -755,6 +756,7 @@ impl MpvRenderContext {
         use gtk::prelude::*;
 
         area.make_current();
+        area.attach_buffers();
         let width = area.allocated_width().max(1);
         let height = area.allocated_height().max(1);
         let mut fbo = MpvOpenGlFbo {
@@ -1138,6 +1140,11 @@ pub(crate) fn render_native_video(area: &gtk::GLArea) -> gtk::glib::Propagation 
         context.render_gl_area(area);
     }
     gtk::glib::Propagation::Stop
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn native_video_render_context_active() -> bool {
+    active_render_context().is_some()
 }
 
 #[cfg(target_os = "linux")]

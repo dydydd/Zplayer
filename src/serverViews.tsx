@@ -213,6 +213,9 @@ export function SettingsView({
                   `Wayland only: ${linuxWindowDiagnostics.waylandRequired ? t("common.yes") : t("common.no")}`,
                   `Wayland backend: ${linuxWindowDiagnostics.gdkBackendWayland ? t("common.yes") : t("common.no")}`,
                   `Native video layer: ${linuxWindowDiagnostics.nativeVideoOverlay ? t("common.yes") : t("common.no")}`,
+                  `Native render context: ${linuxWindowDiagnostics.nativeVideoRenderContext ? t("common.yes") : t("common.no")}`,
+                  `Native render count: ${linuxWindowDiagnostics.nativeVideoRenderCount}`,
+                  `Native render size: ${linuxWindowDiagnostics.nativeVideoRenderWidth}x${linuxWindowDiagnostics.nativeVideoRenderHeight}`,
                   `Opaque window: ${linuxWindowDiagnostics.opaqueWindow ? t("common.yes") : t("common.no")}`,
                 ].join("\n")}</pre>
               )}
