@@ -5293,6 +5293,7 @@ version = "0.1.0"
 dependencies = [
  "gdkwayland-sys",
  "gtk",
+ "libc",
  "libloading",
  "reqwest 0.12.28",
  "serde",

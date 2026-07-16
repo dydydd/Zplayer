@@ -1,10 +1,15 @@
 use serde::Serialize;
 #[cfg(target_os = "linux")]
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    OnceLock,
+};
 use tauri::Runtime;
 
 static NATIVE_VIDEO_OVERLAY_INSTALLED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "linux")]
+static NATIVE_VIDEO_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
 
 #[cfg(target_os = "linux")]
 thread_local! {
@@ -112,6 +117,7 @@ fn install_native_video_overlay<R: Runtime>(
         NATIVE_VIDEO_AREA.with(|stored| {
             *stored.borrow_mut() = Some(video_area);
         });
+        let _ = NATIVE_VIDEO_THREAD.set(std::thread::current().id());
         gtk_window.show_all();
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
@@ -121,6 +127,13 @@ fn install_native_video_overlay<R: Runtime>(
 #[cfg(target_os = "linux")]
 pub(crate) fn with_native_video_area<T>(action: impl FnOnce(&gtk::GLArea) -> T) -> Option<T> {
     NATIVE_VIDEO_AREA.with(|stored| stored.borrow().as_ref().map(action))
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn native_video_thread_is_current() -> bool {
+    NATIVE_VIDEO_THREAD
+        .get()
+        .is_some_and(|thread| *thread == std::thread::current().id())
 }
 
 #[cfg(target_os = "linux")]

@@ -103,6 +103,8 @@ const MPV_RENDER_UPDATE_FRAME: u64 = 1;
 const MPV_RENDER_API_TYPE_OPENGL: &str = "opengl";
 #[cfg(target_os = "linux")]
 const GL_RGBA8: c_int = 0x8058;
+const MPV_CREATE_FAILURE_MESSAGE: &str =
+    "Failed to create libmpv handle. libmpv returns NULL when allocation fails or LC_NUMERIC is not C.";
 
 const DISABLE_MPV_UI_OPTIONS: &[(&str, &str)] = &[
     ("input-default-bindings", "no"),
@@ -146,6 +148,7 @@ struct MpvApi {
     _library: Library,
     #[cfg(target_os = "linux")]
     _sibling_libraries: Vec<Library>,
+    library_path: PathBuf,
     mpv_create: MpvCreate,
     mpv_initialize: MpvInitialize,
     mpv_terminate_destroy: MpvTerminateDestroy,
@@ -221,6 +224,7 @@ impl MpvApi {
             _library: library,
             #[cfg(target_os = "linux")]
             _sibling_libraries: sibling_libraries,
+            library_path: path.to_path_buf(),
             mpv_create,
             mpv_initialize,
             mpv_terminate_destroy,
@@ -273,6 +277,9 @@ fn preload_linux_sibling_libraries(path: &Path) -> Result<Vec<Library>, String> 
     let Some(dir) = path.parent() else {
         return Ok(Vec::new());
     };
+    if dir.as_os_str().is_empty() {
+        return Ok(Vec::new());
+    }
     let mut remaining = fs::read_dir(dir)
         .map_err(|err| format!("Failed to inspect bundled libmpv directory: {err}"))?
         .filter_map(Result::ok)
@@ -345,6 +352,22 @@ fn render_api_abi_values() -> [c_int; 6] {
     ]
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn ensure_mpv_numeric_locale() -> Result<(), String> {
+    let locale = b"C\0";
+    let current = unsafe { libc::setlocale(libc::LC_NUMERIC, locale.as_ptr() as *const c_char) };
+    if current.is_null() {
+        Err("Failed to set LC_NUMERIC=C before creating libmpv handle.".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn ensure_mpv_numeric_locale() -> Result<(), String> {
+    Ok(())
+}
+
 struct MpvSession {
     api: Arc<MpvApi>,
     handle: *mut c_void,
@@ -377,9 +400,13 @@ impl MpvSession {
         seek_back_seconds: i32,
         seek_forward_seconds: i32,
     ) -> Result<Self, String> {
+        ensure_mpv_numeric_locale()?;
         let handle = unsafe { (api.mpv_create)() };
         if handle.is_null() {
-            return Err("Failed to create libmpv handle.".to_string());
+            return Err(format!(
+                "{MPV_CREATE_FAILURE_MESSAGE} Loaded library: {}",
+                api.library_path.display()
+            ));
         }
 
         Ok(Self {
@@ -625,7 +652,9 @@ impl MpvSession {
         };
         if !self.destroyed.swap(true, Ordering::SeqCst) {
             #[cfg(target_os = "linux")]
-            self.free_render_context_locked();
+            if !self.free_render_context_locked() {
+                return;
+            }
             unsafe {
                 (self.api.mpv_terminate_destroy)(self.handle);
             }
@@ -633,7 +662,7 @@ impl MpvSession {
     }
 
     #[cfg(target_os = "linux")]
-    fn free_render_context_locked(&self) {
+    fn free_render_context_locked(&self) -> bool {
         let context = self
             .render_context
             .lock()
@@ -641,7 +670,9 @@ impl MpvSession {
             .and_then(|mut context| context.take());
         if let Some(context) = context {
             clear_active_render_context(context.as_ptr());
-            context.free_on_main_thread();
+            context.free_on_native_video_thread()
+        } else {
+            true
         }
     }
 
@@ -757,43 +788,43 @@ impl MpvRenderContext {
         }
     }
 
-    fn free_on_main_thread(self: Arc<Self>) {
+    fn free_on_native_video_thread(self: Arc<Self>) -> bool {
         if self.freed.load(Ordering::SeqCst) {
-            return;
+            return true;
         }
 
-        let main_context = gtk::glib::MainContext::default();
-        if main_context.is_owner() {
-            self.free_with_native_video_area();
-            return;
+        if crate::platform_window::native_video_thread_is_current() {
+            return self.free_with_native_video_area();
         }
 
         let (tx, rx) = mpsc::channel();
-        gtk::glib::idle_add_once(move || {
-            self.free_with_native_video_area();
-            let _ = tx.send(());
+        gtk::glib::MainContext::default().invoke(move || {
+            let freed = self.free_with_native_video_area();
+            let _ = tx.send(freed);
         });
-        let _ = rx.recv_timeout(Duration::from_secs(1));
+        rx.recv_timeout(Duration::from_secs(5)).unwrap_or(false)
     }
 
-    fn free_with_native_video_area(&self) {
-        let _ = crate::platform_window::with_native_video_area(|area| {
+    fn free_with_native_video_area(&self) -> bool {
+        crate::platform_window::with_native_video_area(|area| {
             use gtk::prelude::*;
 
             area.make_current();
-            self.free_on_current_thread();
-        });
+            self.free_on_current_thread()
+        })
+        .unwrap_or(false)
     }
 
-    fn free_on_current_thread(&self) {
+    fn free_on_current_thread(&self) -> bool {
         if self.freed.swap(true, Ordering::SeqCst) {
-            return;
+            return true;
         }
 
         unsafe {
             (self.api.mpv_render_context_set_update_callback)(self.as_ptr(), None, ptr::null_mut());
             (self.api.mpv_render_context_free)(self.as_ptr());
         }
+        true
     }
 }
 
@@ -813,9 +844,8 @@ pub(crate) fn launch(
     } = request;
     let redacted_url = redact_secret(stream_url, &server.access_token);
     let settings = store::settings(app)?;
-    let libmpv_path = find_libmpv(app, &settings)?;
     let log_path = mpv_log_path(app, item_id)?;
-    let api = load_api(&libmpv_path)?;
+    let api = load_libmpv_api(app, &settings)?;
     let session = Arc::new(MpvSession::create(
         api,
         seek_back_seconds(&settings),
@@ -834,9 +864,9 @@ pub(crate) fn launch(
             start_position_ticks,
         },
     )?;
-    session.initialize()?;
     #[cfg(target_os = "linux")]
     session.initialize_render_context(app)?;
+    session.initialize()?;
     session.command(&["loadfile", stream_url, "replace"])?;
     if let Some(url) = subtitle_url {
         let _ = session.command(&["sub-add", url, "select"]);
@@ -1424,6 +1454,29 @@ fn load_api(path: &Path) -> Result<Arc<MpvApi>, String> {
     loaded
 }
 
+fn load_libmpv_api(app: &AppHandle, settings: &AppSettings) -> Result<Arc<MpvApi>, String> {
+    if let Some(path) = configured_libmpv_path(settings)? {
+        return load_api(&path);
+    }
+
+    let mut errors = Vec::new();
+    for candidate in default_libmpv_load_candidates(app) {
+        match load_api(&candidate) {
+            Ok(api) => return Ok(api),
+            Err(err) => errors.push(err),
+        }
+    }
+
+    if errors.is_empty() {
+        Err(libmpv_not_found_message())
+    } else {
+        Err(format!(
+            "Failed to load libmpv from default locations:\n{}",
+            errors.join("\n")
+        ))
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn default_libmpv_library_names() -> &'static [&'static str] {
     &["libmpv-2.dll", "mpv-2.dll"]
@@ -1497,7 +1550,7 @@ fn libmpv_not_found_message() -> String {
     )
 }
 
-fn find_libmpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, String> {
+fn configured_libmpv_path(settings: &AppSettings) -> Result<Option<PathBuf>, String> {
     if let Some(path) = settings
         .mpv_path
         .as_deref()
@@ -1506,11 +1559,11 @@ fn find_libmpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, Strin
     {
         let custom = PathBuf::from(path);
         if custom.is_file() {
-            return Ok(custom);
+            return Ok(Some(custom));
         }
         if custom.is_dir() {
             if let Some(library) = find_library_in_dir(&custom) {
-                return Ok(library);
+                return Ok(Some(library));
             }
         }
         return Err(format!(
@@ -1519,17 +1572,26 @@ fn find_libmpv(app: &AppHandle, settings: &AppSettings) -> Result<PathBuf, Strin
         ));
     }
 
-    if let Some(path) = libmpv_candidates(app)
-        .into_iter()
-        .find(|path| path.is_file())
-    {
-        return Ok(path);
-    }
+    Ok(None)
+}
 
-    default_libmpv_library_names()
-        .first()
-        .map(PathBuf::from)
-        .ok_or_else(libmpv_not_found_message)
+fn default_libmpv_load_candidates(app: &AppHandle) -> Vec<PathBuf> {
+    let mut candidates = libmpv_candidates(app)
+        .into_iter()
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    append_default_loader_candidates(&mut candidates);
+    candidates
+}
+
+fn append_default_loader_candidates(candidates: &mut Vec<PathBuf>) {
+    candidates.extend(default_libmpv_library_names().iter().map(PathBuf::from));
+    dedupe_libmpv_candidates(candidates);
+}
+
+fn dedupe_libmpv_candidates(candidates: &mut Vec<PathBuf>) {
+    let mut seen = HashSet::new();
+    candidates.retain(|path| seen.insert(path.clone()));
 }
 
 fn libmpv_candidates(app: &AppHandle) -> Vec<PathBuf> {
@@ -1848,6 +1910,34 @@ mod tests {
     }
 
     #[test]
+    fn default_loader_candidates_preserve_bundled_priority_and_add_loader_names() {
+        let bundled = PathBuf::from("/app/libmpv/linux-x86_64/libmpv.so.2");
+        let mut candidates = vec![bundled.clone(), bundled.clone()];
+
+        append_default_loader_candidates(&mut candidates);
+
+        assert_eq!(candidates.first(), Some(&bundled));
+        assert_eq!(
+            candidates
+                .iter()
+                .filter(|candidate| **candidate == bundled)
+                .count(),
+            1
+        );
+        for name in default_libmpv_library_names() {
+            assert!(candidates.contains(&PathBuf::from(name)));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_sibling_preload_skips_dynamic_loader_search_names() {
+        let loaded = preload_linux_sibling_libraries(Path::new("libmpv.so.2")).unwrap();
+
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
     fn disables_mpv_builtin_controls() {
         for expected in [
             ("input-default-bindings", "no"),
@@ -1867,6 +1957,11 @@ mod tests {
     #[test]
     fn starts_libmpv_paused_until_the_webview_is_ready() {
         assert!(MPV_SYNC_START_OPTIONS.contains(&("pause", "yes")));
+    }
+
+    #[test]
+    fn libmpv_create_failure_message_mentions_numeric_locale() {
+        assert!(MPV_CREATE_FAILURE_MESSAGE.contains("LC_NUMERIC"));
     }
 
     #[cfg(target_os = "linux")]
