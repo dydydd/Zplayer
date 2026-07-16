@@ -1,5 +1,6 @@
 ﻿.home-page {
   position: relative;
+  isolation: isolate;
   min-height: 100vh;
   overflow: visible;
   padding: 0;
@@ -22,6 +23,8 @@
   background-position: center;
   background-size: cover;
   text-align: left;
+  contain: layout paint style;
+  will-change: opacity, transform;
   animation: page-enter 0.18s var(--tv-ease) both;
 }
 
@@ -34,6 +37,8 @@
   pointer-events: none;
   opacity: 0;
   background: #181818;
+  backface-visibility: hidden;
+  transform: translateZ(0);
   transition: opacity 0.22s var(--tv-ease);
   will-change: opacity;
 }
@@ -64,6 +69,8 @@
   align-self: end;
   width: min(620px, 100%);
   max-width: 620px;
+  contain: layout paint style;
+  will-change: opacity, transform;
   animation: hero-copy-in 0.72s var(--tv-ease) both;
 }
 
@@ -295,12 +302,18 @@
   display: grid;
   padding: 0 0 72px;
   background: #050505;
+  contain: layout paint style;
   animation: page-enter 0.18s var(--tv-ease) both;
 }
 
 .home-shelf {
   min-width: 0;
   contain: layout paint style;
+}
+
+.home-shelves .home-shelf {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
 
 .home-shelf .media-row {
@@ -406,6 +419,7 @@
 .row-stage {
   position: relative;
   width: 100%;
+  contain: layout style;
 }
 
 .row-stage .media-row {
@@ -414,6 +428,8 @@
   padding-left: max(var(--page-pad), 24px);
   scroll-padding-right: max(var(--page-pad), 24px);
   scroll-padding-left: max(var(--page-pad), 24px);
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .row-float-arrow {
@@ -476,6 +492,7 @@
     linear-gradient(135deg, rgba(58, 63, 74, 0.72), rgba(24, 26, 32, 0.98)),
     #1d1d1f;
   text-align: left;
+  contain: layout paint style;
   transform-origin: center;
   transition:
     transform 0.16s var(--tv-ease),
@@ -590,6 +607,7 @@
   font-size: 20px;
   font-weight: 900;
   text-align: left;
+  contain: layout paint style;
   transition:
     transform 0.16s var(--tv-ease),
     box-shadow 0.16s var(--tv-ease);
