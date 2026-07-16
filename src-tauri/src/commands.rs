@@ -15,6 +15,9 @@ use std::thread;
 use std::time::Duration;
 use tauri::AppHandle;
 
+const HOME_FIRST_LOAD_TIMEOUT: Duration = Duration::from_secs(8);
+const HOME_MORE_TIMEOUT: Duration = Duration::from_secs(12);
+
 fn server_for_input(app: &AppHandle, server_id: Option<&str>) -> Result<SavedServer, String> {
     match server_id.filter(|value| !value.trim().is_empty()) {
         Some(server_id) => store::server_by_id(app, server_id),
@@ -170,7 +173,7 @@ pub(crate) async fn load_home(app: AppHandle) -> Result<HomePayload, String> {
 
 fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
     let server = store::active_server(&app)?;
-    let client = api::http_client(server.use_system_proxy)?;
+    let client = api::http_client_with_timeout(server.use_system_proxy, HOME_FIRST_LOAD_TIMEOUT)?;
     let (libraries, latest) = thread::scope(|scope| {
         let libraries = scope.spawn(|| api::fetch_libraries(&client, &server));
         let latest = scope.spawn(|| api::get_latest_items(&client, &server, None, "24"));
@@ -178,9 +181,7 @@ fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
         let libraries = libraries
             .join()
             .map_err(|_| "Failed to load libraries.".to_string())??;
-        let latest = latest
-            .join()
-            .map_err(|_| "Failed to load latest items.".to_string())??;
+        let latest = latest.join().ok().and_then(Result::ok).unwrap_or_default();
         Ok::<_, String>((libraries, latest))
     })?;
 
@@ -206,7 +207,7 @@ pub(crate) async fn load_home_more(app: AppHandle) -> Result<HomeMorePayload, St
 
 fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
     let server = store::active_server(&app)?;
-    let client = api::http_client(server.use_system_proxy)?;
+    let client = api::http_client_with_timeout(server.use_system_proxy, HOME_MORE_TIMEOUT)?;
     let libraries = api::fetch_libraries(&client, &server)?;
     let app_for_recent = app.clone();
     let (
