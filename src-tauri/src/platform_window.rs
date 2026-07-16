@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
     OnceLock,
 };
-use tauri::Runtime;
+use tauri::{utils::config::Color, Runtime};
 
 static NATIVE_VIDEO_OVERLAY_INSTALLED: AtomicBool = AtomicBool::new(false);
 static NATIVE_VIDEO_RENDER_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -13,6 +13,7 @@ static NATIVE_VIDEO_RENDER_WIDTH: AtomicI32 = AtomicI32::new(0);
 static NATIVE_VIDEO_RENDER_HEIGHT: AtomicI32 = AtomicI32::new(0);
 #[cfg(target_os = "linux")]
 static NATIVE_VIDEO_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
+const WAYLAND_OPAQUE_BACKGROUND: Color = Color(5, 5, 5, 255);
 
 #[cfg(target_os = "linux")]
 thread_local! {
@@ -86,7 +87,16 @@ pub(crate) fn create_main_window<R: Runtime>(
                 "Main window config was not found.",
             )
         })?;
-    let builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+    #[cfg(target_os = "linux")]
+    if use_opaque_window_for_platform(
+        current_platform(),
+        is_wayland_display_set(std::env::var("WAYLAND_DISPLAY").ok().as_deref()),
+    ) {
+        builder = builder
+            .transparent(false)
+            .background_color(WAYLAND_OPAQUE_BACKGROUND);
+    }
     let window = builder.build()?;
     #[cfg(target_os = "linux")]
     install_native_video_overlay(&window)?;
@@ -242,8 +252,15 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         native_video_render_context,
         gdk_backend,
         winit_unix_backend,
-        opaque_window: false,
+        opaque_window: use_opaque_window_for_platform(
+            current_platform(),
+            is_wayland_display_set(wayland_display.as_deref()),
+        ),
     }
+}
+
+fn use_opaque_window_for_platform(platform: DesktopPlatform, wayland_display_set: bool) -> bool {
+    platform == DesktopPlatform::Linux && wayland_display_set
 }
 
 pub(crate) fn is_wayland_display_set(wayland_display: Option<&str>) -> bool {
@@ -324,8 +341,24 @@ mod tests {
     }
 
     #[test]
-    fn diagnostics_keep_window_transparent_for_native_video() {
-        assert!(!diagnostics().opaque_window);
+    fn selects_opaque_window_for_linux_wayland() {
+        assert!(use_opaque_window_for_platform(DesktopPlatform::Linux, true));
+    }
+
+    #[test]
+    fn keeps_existing_transparency_for_non_wayland_or_non_linux() {
+        assert!(!use_opaque_window_for_platform(
+            DesktopPlatform::Linux,
+            false
+        ));
+        assert!(!use_opaque_window_for_platform(
+            DesktopPlatform::Windows,
+            true
+        ));
+        assert!(!use_opaque_window_for_platform(
+            DesktopPlatform::Other,
+            true
+        ));
     }
 
     #[cfg(target_os = "linux")]
