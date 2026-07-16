@@ -20,6 +20,15 @@ type MpvSetOptionString = unsafe extern "C" fn(*mut c_void, *const c_char, *cons
 type MpvGetProperty = unsafe extern "C" fn(*mut c_void, *const c_char, c_int, *mut c_void) -> c_int;
 type MpvWaitEvent = unsafe extern "C" fn(*mut c_void, c_double) -> *mut MpvEvent;
 type MpvErrorString = unsafe extern "C" fn(c_int) -> *const c_char;
+type MpvRenderContextCreate =
+    unsafe extern "C" fn(*mut *mut c_void, *mut c_void, *mut MpvRenderParam) -> c_int;
+type MpvRenderContextSetUpdateCallback =
+    unsafe extern "C" fn(*mut c_void, Option<MpvRenderUpdateFn>, *mut c_void);
+type MpvRenderContextUpdate = unsafe extern "C" fn(*mut c_void) -> u64;
+type MpvRenderContextRender = unsafe extern "C" fn(*mut c_void, *mut MpvRenderParam) -> c_int;
+type MpvRenderContextReportSwap = unsafe extern "C" fn(*mut c_void);
+type MpvRenderContextFree = unsafe extern "C" fn(*mut c_void);
+type MpvRenderUpdateFn = unsafe extern "C" fn(*mut c_void);
 
 #[repr(C)]
 struct MpvEvent {
@@ -38,6 +47,12 @@ struct MpvEventEndFile {
     playlist_insert_num_entries: c_int,
 }
 
+#[repr(C)]
+struct MpvRenderParam {
+    param_type: c_int,
+    data: *mut c_void,
+}
+
 static SESSIONS: OnceLock<Mutex<HashMap<String, Arc<MpvSession>>>> = OnceLock::new();
 static PROGRESS_STATES: OnceLock<Mutex<HashMap<String, PlaybackStateResult>>> = OnceLock::new();
 static EXPLICIT_STOPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -53,6 +68,13 @@ const MPV_EVENT_NONE: c_int = 0;
 const MPV_EVENT_SHUTDOWN: c_int = 1;
 const MPV_EVENT_END_FILE: c_int = 7;
 const MPV_END_FILE_REASON_ERROR: c_int = 4;
+const MPV_RENDER_PARAM_INVALID: c_int = 0;
+const MPV_RENDER_PARAM_API_TYPE: c_int = 1;
+const MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
+const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
+const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
+const MPV_RENDER_UPDATE_FRAME: u64 = 1;
+const MPV_RENDER_API_TYPE_OPENGL: &str = "opengl";
 
 const DISABLE_MPV_UI_OPTIONS: &[(&str, &str)] = &[
     ("input-default-bindings", "no"),
@@ -102,6 +124,12 @@ struct MpvApi {
     mpv_get_property: MpvGetProperty,
     mpv_wait_event: MpvWaitEvent,
     mpv_error_string: MpvErrorString,
+    mpv_render_context_create: MpvRenderContextCreate,
+    mpv_render_context_set_update_callback: MpvRenderContextSetUpdateCallback,
+    mpv_render_context_update: MpvRenderContextUpdate,
+    mpv_render_context_render: MpvRenderContextRender,
+    mpv_render_context_report_swap: MpvRenderContextReportSwap,
+    mpv_render_context_free: MpvRenderContextFree,
 }
 
 impl MpvApi {
@@ -132,8 +160,28 @@ impl MpvApi {
         let mpv_error_string = *library
             .get::<MpvErrorString>(b"mpv_error_string\0")
             .map_err(|err| format!("libmpv is missing mpv_error_string: {err}"))?;
+        let mpv_render_context_create = *library
+            .get::<MpvRenderContextCreate>(b"mpv_render_context_create\0")
+            .map_err(|err| format!("libmpv is missing mpv_render_context_create: {err}"))?;
+        let mpv_render_context_set_update_callback = *library
+            .get::<MpvRenderContextSetUpdateCallback>(b"mpv_render_context_set_update_callback\0")
+            .map_err(|err| {
+                format!("libmpv is missing mpv_render_context_set_update_callback: {err}")
+            })?;
+        let mpv_render_context_update = *library
+            .get::<MpvRenderContextUpdate>(b"mpv_render_context_update\0")
+            .map_err(|err| format!("libmpv is missing mpv_render_context_update: {err}"))?;
+        let mpv_render_context_render = *library
+            .get::<MpvRenderContextRender>(b"mpv_render_context_render\0")
+            .map_err(|err| format!("libmpv is missing mpv_render_context_render: {err}"))?;
+        let mpv_render_context_report_swap = *library
+            .get::<MpvRenderContextReportSwap>(b"mpv_render_context_report_swap\0")
+            .map_err(|err| format!("libmpv is missing mpv_render_context_report_swap: {err}"))?;
+        let mpv_render_context_free = *library
+            .get::<MpvRenderContextFree>(b"mpv_render_context_free\0")
+            .map_err(|err| format!("libmpv is missing mpv_render_context_free: {err}"))?;
 
-        Ok(Self {
+        let api = Self {
             _library: library,
             mpv_create,
             mpv_initialize,
@@ -143,7 +191,18 @@ impl MpvApi {
             mpv_get_property,
             mpv_wait_event,
             mpv_error_string,
-        })
+            mpv_render_context_create,
+            mpv_render_context_set_update_callback,
+            mpv_render_context_update,
+            mpv_render_context_render,
+            mpv_render_context_report_swap,
+            mpv_render_context_free,
+        };
+        debug_assert!(api.render_api_symbols_loaded());
+        debug_assert_eq!(render_api_abi_values()[0], MPV_RENDER_PARAM_INVALID);
+        debug_assert_eq!(MPV_RENDER_UPDATE_FRAME, 1);
+        debug_assert_eq!(MPV_RENDER_API_TYPE_OPENGL, "opengl");
+        Ok(api)
     }
 
     fn error_message(&self, code: c_int) -> String {
@@ -156,6 +215,29 @@ impl MpvApi {
             }
         }
     }
+
+    fn render_api_symbols_loaded(&self) -> bool {
+        [
+            self.mpv_render_context_create as usize,
+            self.mpv_render_context_set_update_callback as usize,
+            self.mpv_render_context_update as usize,
+            self.mpv_render_context_render as usize,
+            self.mpv_render_context_report_swap as usize,
+            self.mpv_render_context_free as usize,
+        ]
+        .into_iter()
+        .all(|address| address != 0)
+    }
+}
+
+fn render_api_abi_values() -> [c_int; 5] {
+    [
+        MPV_RENDER_PARAM_INVALID,
+        MPV_RENDER_PARAM_API_TYPE,
+        MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
+        MPV_RENDER_PARAM_OPENGL_FBO,
+        MPV_RENDER_PARAM_FLIP_Y,
+    ]
 }
 
 struct MpvSession {
@@ -1343,6 +1425,17 @@ mod tests {
     fn linux_uses_libmpv_render_vo_instead_of_external_window() {
         assert!(LINUX_RENDER_API_OPTIONS.contains(&("vo", "libmpv")));
         assert!(LINUX_RENDER_API_OPTIONS.contains(&("force-window", "no")));
+    }
+
+    #[test]
+    fn libmpv_render_api_abi_constants_match_headers() {
+        assert_eq!(MPV_RENDER_PARAM_INVALID, 0);
+        assert_eq!(MPV_RENDER_PARAM_API_TYPE, 1);
+        assert_eq!(MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, 2);
+        assert_eq!(MPV_RENDER_PARAM_OPENGL_FBO, 3);
+        assert_eq!(MPV_RENDER_PARAM_FLIP_Y, 4);
+        assert_eq!(MPV_RENDER_UPDATE_FRAME, 1);
+        assert_eq!(MPV_RENDER_API_TYPE_OPENGL, "opengl");
     }
 
     #[test]
