@@ -287,6 +287,27 @@ html.playing-embedded .drag-strip {
   background: rgba(255, 255, 255, 0.18);
 }
 
+.app.platform-wayland .topbar button,
+.app.platform-wayland .section-title button,
+.app.platform-wayland .filters button,
+.app.platform-wayland .filters select,
+.app.platform-wayland .back,
+.app.platform-wayland .hero-actions button,
+.app.platform-wayland .modal-actions button,
+.app.platform-wayland .password-row button,
+.app.platform-wayland .search,
+.app.platform-wayland .topbar .icon-btn {
+  background: rgba(17, 19, 24, 0.9);
+  backdrop-filter: none;
+}
+
+.app.platform-wayland .topbar button:hover,
+.app.platform-wayland .topbar button:focus-visible,
+.app.platform-wayland .topbar .icon-btn:hover,
+.app.platform-wayland .topbar .icon-btn:focus-visible {
+  background: rgba(42, 46, 56, 0.94);
+}
+
 .status,
 .error {
   position: fixed;

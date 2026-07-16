@@ -1065,9 +1065,10 @@ function App() {
     detail.item.id === view.id || detail.episodes.some((episode) => episode.id === view.id)
   );
   const showContent = !searchOpen && !searchQuery.trim();
+  const waylandCompositor = !!linuxWindowDiagnostics?.waylandRequired && linuxWindowDiagnostics.waylandDisplaySet;
 
   return (
-    <main className={`app theme-${resolvedSettings.theme}`}>
+    <main className={`app theme-${resolvedSettings.theme} ${waylandCompositor ? "platform-wayland" : ""}`}>
       <section className="workspace">
         <div className="drag-strip" data-tauri-drag-region />
         {view.name !== "player" && (
