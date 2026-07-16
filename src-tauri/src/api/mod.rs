@@ -341,6 +341,8 @@ pub(crate) fn get_show_episodes(
         ),
         ("SortOrder", "Ascending".to_string()),
         ("sortOrder", "Ascending".to_string()),
+        ("IsMissing", "false".to_string()),
+        ("isMissing", "false".to_string()),
         ("EnableImages", "true".to_string()),
         ("enableImages", "true".to_string()),
         ("EnableUserData", "true".to_string()),
