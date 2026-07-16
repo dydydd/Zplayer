@@ -154,6 +154,7 @@ function App() {
   const viewRef = useRef<View>({ name: "servers" });
   const requestId = useRef(0);
   const lastScrollTop = useRef(0);
+  const chromeScrollFrame = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const homeCache = useRef(new Map<string, HomePayload>());
   const detailCache = useRef(new Map<string, ItemDetailPayload>());
@@ -263,7 +264,7 @@ function App() {
     if (!scroller) return;
     const element = scroller;
 
-    function handleScroll() {
+    function updateChromeVisibility() {
       const nextScrollTop = element.scrollTop;
       const scrollingUp = nextScrollTop < lastScrollTop.current;
       const nextVisible = nextScrollTop < 24 || scrollingUp || searchOpen || serverMenuOpen;
@@ -274,9 +275,23 @@ function App() {
       lastScrollTop.current = nextScrollTop;
     }
 
-    element.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => element.removeEventListener("scroll", handleScroll);
+    function scheduleChromeVisibility() {
+      if (chromeScrollFrame.current !== null) return;
+      chromeScrollFrame.current = window.requestAnimationFrame(() => {
+        chromeScrollFrame.current = null;
+        updateChromeVisibility();
+      });
+    }
+
+    element.addEventListener("scroll", scheduleChromeVisibility, { passive: true });
+    updateChromeVisibility();
+    return () => {
+      if (chromeScrollFrame.current !== null) {
+        window.cancelAnimationFrame(chromeScrollFrame.current);
+        chromeScrollFrame.current = null;
+      }
+      element.removeEventListener("scroll", scheduleChromeVisibility);
+    };
   }, [searchOpen, serverMenuOpen]);
 
   useEffect(() => {
