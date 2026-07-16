@@ -194,6 +194,7 @@ export type HomeMorePayload = {
   libraryLatest: LibraryLatestPayload[];
   recommendedMovies: MediaItem[];
   recommendedShows: MediaItem[];
+  resumeItems: MediaItem[];
   favoriteItems: MediaItem[];
   recentItems: MediaItem[];
 };

@@ -171,10 +171,9 @@ pub(crate) async fn load_home(app: AppHandle) -> Result<HomePayload, String> {
 fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
     let server = store::active_server(&app)?;
     let client = api::http_client(server.use_system_proxy)?;
-    let (libraries, latest, resume_items) = thread::scope(|scope| {
+    let (libraries, latest) = thread::scope(|scope| {
         let libraries = scope.spawn(|| api::fetch_libraries(&client, &server));
         let latest = scope.spawn(|| api::get_latest_items(&client, &server, None, "24"));
-        let resume_items = scope.spawn(|| api::get_resume_items(&client, &server));
 
         let libraries = libraries
             .join()
@@ -182,12 +181,7 @@ fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
         let latest = latest
             .join()
             .map_err(|_| "Failed to load latest items.".to_string())??;
-        let resume_items = resume_items
-            .join()
-            .ok()
-            .and_then(Result::ok)
-            .unwrap_or_default();
-        Ok::<_, String>((libraries, latest, resume_items))
+        Ok::<_, String>((libraries, latest))
     })?;
 
     Ok(HomePayload {
@@ -197,7 +191,7 @@ fn load_home_sync(app: AppHandle) -> Result<HomePayload, String> {
         latest,
         recommended_movies: Vec::new(),
         recommended_shows: Vec::new(),
-        resume_items,
+        resume_items: Vec::new(),
         favorite_items: Vec::new(),
         recent_items: Vec::new(),
     })
@@ -215,41 +209,54 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
     let client = api::http_client(server.use_system_proxy)?;
     let libraries = api::fetch_libraries(&client, &server)?;
     let app_for_recent = app.clone();
-    let (library_latest, recommended_movies, recommended_shows, favorite_items, recent_items) =
-        thread::scope(|scope| {
-            let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
-            let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
-            let recommended_shows =
-                scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
-            let favorite_items = scope.spawn(|| load_favorite_items(&client, &server));
-            let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
+    let (
+        library_latest,
+        recommended_movies,
+        recommended_shows,
+        resume_items,
+        favorite_items,
+        recent_items,
+    ) = thread::scope(|scope| {
+        let library_latest = scope.spawn(|| load_library_latest(&client, &server, &libraries));
+        let recommended_movies = scope.spawn(|| load_recommended_movies(&client, &server));
+        let recommended_shows =
+            scope.spawn(|| api::get_suggested_items(&client, &server, "Series"));
+        let resume_items = scope.spawn(|| api::get_resume_items(&client, &server));
+        let favorite_items = scope.spawn(|| load_favorite_items(&client, &server));
+        let recent_items = scope.spawn(|| load_recent_items(&app_for_recent, &client, &server));
 
-            (
-                library_latest.join().unwrap_or_default(),
-                recommended_movies
-                    .join()
-                    .ok()
-                    .and_then(Result::ok)
-                    .unwrap_or_default(),
-                recommended_shows
-                    .join()
-                    .ok()
-                    .and_then(Result::ok)
-                    .unwrap_or_default(),
-                favorite_items
-                    .join()
-                    .ok()
-                    .and_then(Result::ok)
-                    .unwrap_or_default(),
-                recent_items.join().unwrap_or_default(),
-            )
-        });
+        (
+            library_latest.join().unwrap_or_default(),
+            recommended_movies
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            recommended_shows
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            resume_items
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            favorite_items
+                .join()
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default(),
+            recent_items.join().unwrap_or_default(),
+        )
+    });
 
     Ok(HomeMorePayload {
         server_id: server.id,
         library_latest,
         recommended_movies,
         recommended_shows,
+        resume_items,
         favorite_items,
         recent_items,
     })

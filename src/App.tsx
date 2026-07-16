@@ -665,6 +665,7 @@ function App() {
           libraryLatest: more.libraryLatest,
           recommendedMovies: more.recommendedMovies,
           recommendedShows: more.recommendedShows,
+          resumeItems: more.resumeItems,
           favoriteItems: more.favoriteItems,
           recentItems: more.recentItems,
         };
