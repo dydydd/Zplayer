@@ -88,7 +88,7 @@ fn install_native_video_overlay<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use gtk::prelude::*;
-    use webkit2gtk::WebViewExt;
+    use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
 
     let webview_window = window.clone();
     let container_window = window.clone();
@@ -118,6 +118,9 @@ fn install_native_video_overlay<R: Runtime>(
         video_area.connect_render(|area, _context| handle_native_video_render(area));
         webview.set_app_paintable(true);
         webview.set_background_color(&transparent);
+        if let Some(settings) = WebViewExt::settings(&webview) {
+            settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Never);
+        }
         gtk_window.set_app_paintable(true);
         if let Some(visual) =
             gtk::prelude::GtkWindowExt::screen(&gtk_window).and_then(|screen| screen.rgba_visual())
