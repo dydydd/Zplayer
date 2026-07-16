@@ -147,6 +147,9 @@ jobs:
       - name: Keep Linux libmpv resources
         run: rm -rf libmpv/windows-x86_64 libmpv/macos-universal
 
+      - name: Bundle Linux libmpv runtime dependencies
+        run: libmpv/bundle-linux-runtime.sh
+
       - name: Stamp app version
         env:
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
