@@ -57,6 +57,11 @@
     linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, transparent 36%, rgba(0, 0, 0, 0.96) 100%);
 }
 
+.home-server-switch > button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .feature-copy,
 .hero-dots,
 .home-shelf,
@@ -72,6 +77,112 @@
   contain: layout paint style;
   will-change: opacity, transform;
   animation: hero-copy-in 0.72s var(--tv-ease) both;
+}
+
+.home-loading .feature-banner {
+  background:
+    linear-gradient(135deg, rgba(44, 48, 58, 0.92), rgba(18, 20, 26, 0.96)),
+    #181818;
+}
+
+.home-hero-skeleton {
+  grid-template-rows: minmax(max-content, 1fr) auto auto;
+}
+
+.home-skeleton-line,
+.home-skeleton-card,
+.home-skeleton-pill,
+.home-skeleton-circle,
+.home-skeleton-dots span {
+  display: block;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)),
+    rgba(255, 255, 255, 0.08);
+  background-size: 240% 100%;
+  animation: home-skeleton-pulse 1.25s ease-in-out infinite;
+}
+
+.home-skeleton-copy {
+  display: grid;
+  gap: 16px;
+  width: min(620px, 100%);
+}
+
+.home-skeleton-line {
+  height: 18px;
+  border-radius: 999px;
+}
+
+.home-skeleton-line.title {
+  width: min(440px, 78vw);
+  height: clamp(42px, 6vw, 68px);
+}
+
+.home-skeleton-line.meta {
+  width: min(260px, 46vw);
+  height: 20px;
+  margin-top: 2px;
+}
+
+.home-skeleton-line.body {
+  width: min(520px, 82vw);
+  height: 18px;
+}
+
+.home-skeleton-line.body.short {
+  width: min(360px, 58vw);
+}
+
+.home-skeleton-actions {
+  margin-top: 12px;
+}
+
+.home-skeleton-pill {
+  width: 176px;
+  height: 58px;
+  border-radius: 999px;
+}
+
+.home-skeleton-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+}
+
+.home-skeleton-dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.home-skeleton-dots span:first-child {
+  width: 24px;
+}
+
+.home-skeleton-shelf {
+  min-width: 0;
+}
+
+.home-skeleton-line.shelf-title {
+  width: min(220px, 40vw);
+  height: 27px;
+  margin-bottom: 16px;
+}
+
+.home-skeleton-card {
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+
+@keyframes home-skeleton-pulse {
+  from {
+    background-position: 180% 0;
+  }
+
+  to {
+    background-position: -60% 0;
+  }
 }
 
 @keyframes hero-copy-in {

@@ -60,6 +60,7 @@ export function HomeView({
   const [visibleFeaturedImage, setVisibleFeaturedImage] = useState<string | null | undefined>(undefined);
   const longPressTimer = useRef<number | null>(null);
   const preloadedImages = useRef<HTMLImageElement[]>([]);
+  const currentServer = activeServer ?? home?.server ?? null;
   const heroItems = useMemo(() => {
     const recommended = [...(home?.recommendedMovies ?? []), ...(home?.recommendedShows ?? [])];
     return rotateDaily(
@@ -129,7 +130,7 @@ export function HomeView({
     return () => window.clearInterval(timer);
   }, [heroItems.length]);
 
-  if (!activeServer) {
+  if (!currentServer) {
     return (
       <div className="empty">
         <h1>Zplayer</h1>
@@ -139,8 +140,12 @@ export function HomeView({
     );
   }
 
+  if (!home) {
+    return <HomeSkeleton serverName={currentServer.name} chromeVisible={chromeVisible} />;
+  }
+
   return (
-    <div className="page home-page">
+    <div className="page home-page" aria-busy={false}>
       <div className={`home-server-switch chrome-float ${chromeVisible ? "" : "hidden"}`}>
         <button
           onClick={() => setServerMenuOpen(!serverMenuOpen)}
@@ -154,7 +159,7 @@ export function HomeView({
           title={t("home.serverSwitchTitle")}
         >
           <span className="home-icon"><UiIcon name="server" /></span>
-          {activeServer.name}
+          {currentServer.name}
         </button>
         {serverMenuOpen && (
           <div className="server-popover">
@@ -274,6 +279,68 @@ const LibraryShelf = memo(function LibraryShelf({
     </section>
   );
 });
+
+function HomeSkeleton({ serverName, chromeVisible }: { serverName: string; chromeVisible: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div className="page home-page home-loading" aria-busy="true">
+      <div className={`home-server-switch chrome-float ${chromeVisible ? "" : "hidden"}`}>
+        <button type="button" disabled title={t("home.serverSwitchTitle")}>
+          <span className="home-icon"><UiIcon name="server" /></span>
+          {serverName}
+        </button>
+      </div>
+      <section className="feature-banner home-hero-skeleton">
+        <div className="feature-copy home-skeleton-copy">
+          <span className="home-skeleton-line title" />
+          <span className="home-skeleton-line meta" />
+          <span className="home-skeleton-line body" />
+          <span className="home-skeleton-line body short" />
+          <div className="feature-actions home-skeleton-actions">
+            <span className="home-skeleton-pill" />
+            <span className="home-skeleton-circle" />
+            <span className="home-skeleton-circle" />
+          </div>
+        </div>
+        <div className="hero-dots home-skeleton-dots" aria-hidden="true">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+        <SkeletonShelf className="hero-shelf" itemCount={5} />
+      </section>
+      <div className="home-shelves">
+        <SkeletonShelf itemCount={6} />
+        <SkeletonShelf itemCount={6} poster />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonShelf({
+  className = "",
+  itemCount,
+  poster = false,
+}: {
+  className?: string;
+  itemCount: number;
+  poster?: boolean;
+}) {
+  return (
+    <section className={`home-shelf home-skeleton-shelf ${className}`}>
+      <div className="shelf-header">
+        <span className="home-skeleton-line shelf-title" />
+      </div>
+      <div className="row-stage">
+        <div className="media-row" aria-hidden="true">
+          {Array.from({ length: itemCount }).map((_, index) => (
+            <span key={index} className={`home-skeleton-card ${poster ? "poster-card" : "apple-card"}`} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 const MediaShelf = memo(function MediaShelf({
   title,
