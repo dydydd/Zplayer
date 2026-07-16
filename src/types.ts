@@ -64,6 +64,11 @@ export type LinuxWindowDiagnostics = {
   gdkBackend?: string | null;
   winitUnixBackend?: string | null;
   webkitDisableDmabufRenderer: boolean;
+  renderGpuPreference?: string | null;
+  nvidiaDriverAvailable: boolean;
+  nvidiaPrimeRenderOffload: boolean;
+  glxVendorLibraryName?: string | null;
+  vulkanOptimusLayer?: string | null;
   waylandRequired: boolean;
   gdkBackendWayland: boolean;
   winitBackendWayland: boolean;

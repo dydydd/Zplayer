@@ -1,6 +1,8 @@
 use serde::Serialize;
 #[cfg(target_os = "linux")]
 use std::cell::RefCell;
+#[cfg(target_os = "linux")]
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
     OnceLock,
@@ -35,6 +37,11 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) gdk_backend: Option<String>,
     pub(crate) winit_unix_backend: Option<String>,
     pub(crate) webkit_disable_dmabuf_renderer: bool,
+    pub(crate) render_gpu_preference: Option<String>,
+    pub(crate) nvidia_driver_available: bool,
+    pub(crate) nvidia_prime_render_offload: bool,
+    pub(crate) glx_vendor_library_name: Option<String>,
+    pub(crate) vulkan_optimus_layer: Option<String>,
     pub(crate) wayland_required: bool,
     pub(crate) gdk_backend_wayland: bool,
     pub(crate) winit_backend_wayland: bool,
@@ -53,6 +60,7 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
     {
         std::env::set_var("GDK_BACKEND", "wayland");
         std::env::set_var("WINIT_UNIX_BACKEND", "wayland");
+        configure_linux_render_gpu();
         if is_truthy_env(
             std::env::var("ZPLAYER_ENABLE_WEBKIT_DMABUF")
                 .ok()
@@ -72,6 +80,37 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn configure_linux_render_gpu() {
+    if !should_force_nvidia_rendering(
+        std::env::var("ZPLAYER_RENDER_GPU").ok().as_deref(),
+        linux_nvidia_driver_available(),
+    ) {
+        return;
+    }
+
+    std::env::set_var("__NV_PRIME_RENDER_OFFLOAD", "1");
+    std::env::set_var("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
+    std::env::set_var("__VK_LAYER_NV_optimus", "NVIDIA_only");
+}
+
+#[cfg(target_os = "linux")]
+fn linux_nvidia_driver_available() -> bool {
+    Path::new("/sys/module/nvidia").exists() || Path::new("/proc/driver/nvidia/version").exists()
+}
+
+fn should_force_nvidia_rendering(preference: Option<&str>, nvidia_available: bool) -> bool {
+    let Some(preference) = preference else {
+        return nvidia_available;
+    };
+    match preference.trim().to_ascii_lowercase().as_str() {
+        "" | "auto" => nvidia_available,
+        "1" | "true" | "yes" | "on" | "nvidia" | "dgpu" | "discrete" | "4060" => true,
+        "0" | "false" | "no" | "off" | "system" | "default" | "integrated" | "igpu" => false,
+        _ => nvidia_available,
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -233,6 +272,14 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
     let gdk_backend = std::env::var("GDK_BACKEND").ok();
     let winit_unix_backend = std::env::var("WINIT_UNIX_BACKEND").ok();
     let webkit_disable_dmabuf_renderer = std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").ok();
+    let render_gpu_preference = std::env::var("ZPLAYER_RENDER_GPU").ok();
+    let nvidia_prime_render_offload = std::env::var("__NV_PRIME_RENDER_OFFLOAD").ok();
+    let glx_vendor_library_name = std::env::var("__GLX_VENDOR_LIBRARY_NAME").ok();
+    let vulkan_optimus_layer = std::env::var("__VK_LAYER_NV_optimus").ok();
+    #[cfg(target_os = "linux")]
+    let nvidia_driver_available = linux_nvidia_driver_available();
+    #[cfg(not(target_os = "linux"))]
+    let nvidia_driver_available = false;
     #[cfg(target_os = "linux")]
     let native_video_render_context = crate::mpv::native_video_render_context_active();
     #[cfg(target_os = "linux")]
@@ -250,6 +297,11 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         xdg_session_type,
         wayland_display_set: is_wayland_display_set(wayland_display.as_deref()),
         webkit_disable_dmabuf_renderer: is_truthy_env(webkit_disable_dmabuf_renderer.as_deref()),
+        render_gpu_preference,
+        nvidia_driver_available,
+        nvidia_prime_render_offload: is_truthy_env(nvidia_prime_render_offload.as_deref()),
+        glx_vendor_library_name,
+        vulkan_optimus_layer,
         wayland_required: current_platform() == DesktopPlatform::Linux,
         gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
         winit_backend_wayland: is_winit_wayland_backend(winit_unix_backend.as_deref()),
@@ -348,6 +400,21 @@ mod tests {
         assert!(!is_truthy_env(Some("0")));
         assert!(!is_truthy_env(Some("false")));
         assert!(!is_truthy_env(None));
+    }
+
+    #[test]
+    fn defaults_to_nvidia_when_driver_is_available() {
+        assert!(should_force_nvidia_rendering(None, true));
+        assert!(should_force_nvidia_rendering(Some("auto"), true));
+        assert!(!should_force_nvidia_rendering(None, false));
+    }
+
+    #[test]
+    fn render_gpu_preference_can_force_or_release_nvidia() {
+        assert!(should_force_nvidia_rendering(Some("nvidia"), false));
+        assert!(should_force_nvidia_rendering(Some("4060"), false));
+        assert!(!should_force_nvidia_rendering(Some("system"), true));
+        assert!(!should_force_nvidia_rendering(Some("integrated"), true));
     }
 
     #[test]
