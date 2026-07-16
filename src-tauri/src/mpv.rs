@@ -814,10 +814,21 @@ fn add_embed_options(app: &AppHandle, session: &MpvSession) -> Result<(), String
     session.set_option("ontop", "no")
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+fn add_embed_options(_app: &AppHandle, session: &MpvSession) -> Result<(), String> {
+    for (name, value) in LINUX_RENDER_API_OPTIONS {
+        session.set_option(name, value)?;
+    }
+    Ok(())
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
 fn add_embed_options(_app: &AppHandle, session: &MpvSession) -> Result<(), String> {
     session.set_option("force-window", "yes")
 }
+
+#[cfg(target_os = "linux")]
+const LINUX_RENDER_API_OPTIONS: &[(&str, &str)] = &[("vo", "libmpv"), ("force-window", "no")];
 
 fn app_data_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -1325,6 +1336,13 @@ mod tests {
     #[test]
     fn starts_libmpv_paused_until_the_webview_is_ready() {
         assert!(MPV_SYNC_START_OPTIONS.contains(&("pause", "yes")));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_uses_libmpv_render_vo_instead_of_external_window() {
+        assert!(LINUX_RENDER_API_OPTIONS.contains(&("vo", "libmpv")));
+        assert!(LINUX_RENDER_API_OPTIONS.contains(&("force-window", "no")));
     }
 
     #[test]
