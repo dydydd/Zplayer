@@ -84,6 +84,12 @@ fn install_native_video_overlay<R: Runtime>(
         let Ok(container) = container_window.default_vbox() else {
             return;
         };
+        let Some(gtk_window) = container
+            .parent()
+            .and_then(|parent| parent.downcast::<gtk::Window>().ok())
+        else {
+            return;
+        };
         let webview = webview.inner();
         let overlay = gtk::Overlay::new();
         let video_area = gtk::GLArea::new();
@@ -101,11 +107,12 @@ fn install_native_video_overlay<R: Runtime>(
         overlay.add(&video_area);
         overlay.add_overlay(&webview);
         overlay.set_overlay_pass_through(&webview, false);
-        container.pack_start(&overlay, true, true, 0);
+        gtk_window.remove(&container);
+        gtk_window.add(&overlay);
         NATIVE_VIDEO_AREA.with(|stored| {
             *stored.borrow_mut() = Some(video_area);
         });
-        container.show_all();
+        gtk_window.show_all();
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
     Ok(())
