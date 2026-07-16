@@ -98,6 +98,7 @@ const MPV_RENDER_PARAM_API_TYPE: c_int = 1;
 const MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
 const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
 const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
+const MPV_RENDER_PARAM_WL_DISPLAY: c_int = 9;
 const MPV_RENDER_UPDATE_FRAME: u64 = 1;
 const MPV_RENDER_API_TYPE_OPENGL: &str = "opengl";
 #[cfg(target_os = "linux")]
@@ -257,13 +258,14 @@ impl MpvApi {
     }
 }
 
-fn render_api_abi_values() -> [c_int; 5] {
+fn render_api_abi_values() -> [c_int; 6] {
     [
         MPV_RENDER_PARAM_INVALID,
         MPV_RENDER_PARAM_API_TYPE,
         MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
         MPV_RENDER_PARAM_OPENGL_FBO,
         MPV_RENDER_PARAM_FLIP_Y,
+        MPV_RENDER_PARAM_WL_DISPLAY,
     ]
 }
 
@@ -357,7 +359,9 @@ impl MpvSession {
                     use gtk::prelude::*;
 
                     area.make_current();
-                    let context = session.create_render_context_on_current_thread()?;
+                    let wayland_display = wayland_display_for_gl_area(area)?;
+                    let context =
+                        session.create_render_context_on_current_thread(wayland_display)?;
                     session.set_render_context_on_current_thread(context)?;
                     area.queue_render();
                     Ok(())
@@ -379,7 +383,10 @@ impl MpvSession {
     }
 
     #[cfg(target_os = "linux")]
-    fn create_render_context_on_current_thread(&self) -> Result<Arc<MpvRenderContext>, String> {
+    fn create_render_context_on_current_thread(
+        &self,
+        wayland_display: *mut c_void,
+    ) -> Result<Arc<MpvRenderContext>, String> {
         let _guard = self
             .calls
             .lock()
@@ -400,6 +407,10 @@ impl MpvSession {
             MpvRenderParam {
                 param_type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
                 data: &mut init_params as *mut MpvOpenGlInitParams as *mut c_void,
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_WL_DISPLAY,
+                data: wayland_display,
             },
             MpvRenderParam {
                 param_type: MPV_RENDER_PARAM_INVALID,
@@ -1058,6 +1069,29 @@ fn clear_active_render_context(context: *mut c_void) {
         }
     }
     crate::platform_window::queue_native_video_render();
+}
+
+#[cfg(target_os = "linux")]
+fn wayland_display_for_gl_area(area: &gtk::GLArea) -> Result<*mut c_void, String> {
+    use gtk::gdk::prelude::*;
+    use gtk::glib::object::ObjectType;
+    use gtk::prelude::*;
+
+    let display = area.display();
+    if !display.backend().is_wayland() {
+        return Err("Linux playback requires a Wayland GDK display.".to_string());
+    }
+
+    let wayland_display = unsafe {
+        gdk_wayland_sys::gdk_wayland_display_get_wl_display(
+            display.as_ptr() as *mut gdk_wayland_sys::GdkWaylandDisplay
+        )
+    } as *mut c_void;
+    if wayland_display.is_null() {
+        Err("Failed to get the Wayland display for libmpv rendering.".to_string())
+    } else {
+        Ok(wayland_display)
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1773,6 +1807,7 @@ mod tests {
         assert_eq!(MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, 2);
         assert_eq!(MPV_RENDER_PARAM_OPENGL_FBO, 3);
         assert_eq!(MPV_RENDER_PARAM_FLIP_Y, 4);
+        assert_eq!(MPV_RENDER_PARAM_WL_DISPLAY, 9);
         assert_eq!(MPV_RENDER_UPDATE_FRAME, 1);
         assert_eq!(MPV_RENDER_API_TYPE_OPENGL, "opengl");
     }
