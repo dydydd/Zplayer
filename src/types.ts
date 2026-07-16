@@ -63,6 +63,7 @@ export type LinuxWindowDiagnostics = {
   waylandDisplaySet: boolean;
   gdkBackend?: string | null;
   winitUnixBackend?: string | null;
+  webkitDisableDmabufRenderer: boolean;
   waylandRequired: boolean;
   gdkBackendWayland: boolean;
   winitBackendWayland: boolean;
@@ -70,6 +71,8 @@ export type LinuxWindowDiagnostics = {
   nativeVideoRenderCount: number;
   nativeVideoRenderWidth: number;
   nativeVideoRenderHeight: number;
+  nativeVideoRenderFramebuffer: number;
+  nativeVideoRenderStatus: number;
   nativeVideoRenderContext: boolean;
   opaqueWindow: boolean;
 };

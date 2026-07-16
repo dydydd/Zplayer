@@ -211,6 +211,7 @@ export function SettingsView({
                   `WAYLAND_DISPLAY: ${linuxWindowDiagnostics.waylandDisplaySet ? "set" : t("common.unset")}`,
                   `GDK_BACKEND: ${linuxWindowDiagnostics.gdkBackend ?? t("common.unset")}`,
                   `WINIT_UNIX_BACKEND: ${linuxWindowDiagnostics.winitUnixBackend ?? t("common.unset")}`,
+                  `WEBKIT_DISABLE_DMABUF_RENDERER: ${linuxWindowDiagnostics.webkitDisableDmabufRenderer ? "1" : t("common.unset")}`,
                   `Wayland only: ${linuxWindowDiagnostics.waylandRequired ? t("common.yes") : t("common.no")}`,
                   `Wayland backend: ${linuxWindowDiagnostics.gdkBackendWayland ? t("common.yes") : t("common.no")}`,
                   `Tao backend: ${linuxWindowDiagnostics.winitBackendWayland ? "wayland" : t("common.no")}`,
@@ -218,6 +219,8 @@ export function SettingsView({
                   `Native render context: ${linuxWindowDiagnostics.nativeVideoRenderContext ? t("common.yes") : t("common.no")}`,
                   `Native render count: ${linuxWindowDiagnostics.nativeVideoRenderCount}`,
                   `Native render size: ${linuxWindowDiagnostics.nativeVideoRenderWidth}x${linuxWindowDiagnostics.nativeVideoRenderHeight}`,
+                  `Native render framebuffer: ${linuxWindowDiagnostics.nativeVideoRenderFramebuffer}`,
+                  `Native render status: ${linuxWindowDiagnostics.nativeVideoRenderStatus}`,
                   `Opaque window: ${linuxWindowDiagnostics.opaqueWindow ? t("common.yes") : t("common.no")}`,
                 ].join("\n")}</pre>
               )}

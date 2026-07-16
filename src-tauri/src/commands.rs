@@ -671,7 +671,7 @@ pub(crate) async fn control_playback(input: PlaybackControlInput) -> Result<(), 
 pub(crate) async fn playback_state(
     input: PlaybackStateInput,
 ) -> Result<PlaybackStateResult, String> {
-    tauri::async_runtime::spawn_blocking(move || mpv::state(&input.play_session_id))
+    tauri::async_runtime::spawn_blocking(move || mpv::refresh_state(&input.play_session_id))
         .await
         .map_err(|err| err.to_string())?
 }

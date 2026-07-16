@@ -33,6 +33,7 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) wayland_display_set: bool,
     pub(crate) gdk_backend: Option<String>,
     pub(crate) winit_unix_backend: Option<String>,
+    pub(crate) webkit_disable_dmabuf_renderer: bool,
     pub(crate) wayland_required: bool,
     pub(crate) gdk_backend_wayland: bool,
     pub(crate) winit_backend_wayland: bool,
@@ -40,6 +41,8 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) native_video_render_count: u64,
     pub(crate) native_video_render_width: i32,
     pub(crate) native_video_render_height: i32,
+    pub(crate) native_video_render_framebuffer: i32,
+    pub(crate) native_video_render_status: i32,
     pub(crate) native_video_render_context: bool,
     pub(crate) opaque_window: bool,
 }
@@ -49,6 +52,8 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
     {
         std::env::set_var("GDK_BACKEND", "wayland");
         std::env::set_var("WINIT_UNIX_BACKEND", "wayland");
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE");
         let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
         if !is_wayland_display_set(wayland_display.as_deref()) {
             return Err(
@@ -187,14 +192,24 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
     let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
     let gdk_backend = std::env::var("GDK_BACKEND").ok();
     let winit_unix_backend = std::env::var("WINIT_UNIX_BACKEND").ok();
+    let webkit_disable_dmabuf_renderer = std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").ok();
     #[cfg(target_os = "linux")]
     let native_video_render_context = crate::mpv::native_video_render_context_active();
+    #[cfg(target_os = "linux")]
+    let native_video_render_framebuffer = crate::mpv::native_video_render_framebuffer();
+    #[cfg(target_os = "linux")]
+    let native_video_render_status = crate::mpv::native_video_render_status();
     #[cfg(not(target_os = "linux"))]
     let native_video_render_context = false;
+    #[cfg(not(target_os = "linux"))]
+    let native_video_render_framebuffer = 0;
+    #[cfg(not(target_os = "linux"))]
+    let native_video_render_status = 0;
 
     LinuxWindowDiagnostics {
         xdg_session_type,
         wayland_display_set: is_wayland_display_set(wayland_display.as_deref()),
+        webkit_disable_dmabuf_renderer: is_truthy_env(webkit_disable_dmabuf_renderer.as_deref()),
         wayland_required: current_platform() == DesktopPlatform::Linux,
         gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
         winit_backend_wayland: is_winit_wayland_backend(winit_unix_backend.as_deref()),
@@ -202,6 +217,8 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         native_video_render_count: NATIVE_VIDEO_RENDER_COUNT.load(Ordering::SeqCst),
         native_video_render_width: NATIVE_VIDEO_RENDER_WIDTH.load(Ordering::SeqCst),
         native_video_render_height: NATIVE_VIDEO_RENDER_HEIGHT.load(Ordering::SeqCst),
+        native_video_render_framebuffer,
+        native_video_render_status,
         native_video_render_context,
         gdk_backend,
         winit_unix_backend,
@@ -224,6 +241,15 @@ pub(crate) fn is_wayland_backend(gdk_backend: Option<&str>) -> bool {
 
 pub(crate) fn is_winit_wayland_backend(winit_unix_backend: Option<&str>) -> bool {
     winit_unix_backend.is_some_and(|value| value.eq_ignore_ascii_case("wayland"))
+}
+
+pub(crate) fn is_truthy_env(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
 }
 
 fn current_platform() -> DesktopPlatform {
@@ -264,6 +290,17 @@ mod tests {
         assert!(is_winit_wayland_backend(Some("WAYLAND")));
         assert!(!is_winit_wayland_backend(Some("x11")));
         assert!(!is_winit_wayland_backend(None));
+    }
+
+    #[test]
+    fn detects_truthy_environment_values() {
+        assert!(is_truthy_env(Some("1")));
+        assert!(is_truthy_env(Some("true")));
+        assert!(is_truthy_env(Some("YES")));
+        assert!(is_truthy_env(Some("on")));
+        assert!(!is_truthy_env(Some("0")));
+        assert!(!is_truthy_env(Some("false")));
+        assert!(!is_truthy_env(None));
     }
 
     #[test]

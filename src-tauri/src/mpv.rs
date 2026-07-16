@@ -7,7 +7,7 @@ use std::fs;
 use std::os::raw::{c_char, c_double, c_int, c_void};
 use std::path::{Path, PathBuf};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -34,6 +34,8 @@ type MpvRenderUpdateFn = unsafe extern "C" fn(*mut c_void);
 type MpvGlGetProcAddress = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_void;
 #[cfg(target_os = "linux")]
 type EpoxyGetProcAddress = unsafe extern "C" fn(*const c_char) -> *mut c_void;
+#[cfg(target_os = "linux")]
+type GlGetIntegerv = unsafe extern "C" fn(c_int, *mut c_int);
 
 #[repr(C)]
 struct MpvEvent {
@@ -85,6 +87,10 @@ static API_CACHE: OnceLock<ApiCache> = OnceLock::new();
 static ACTIVE_RENDER_CONTEXT: OnceLock<Mutex<Option<Arc<MpvRenderContext>>>> = OnceLock::new();
 #[cfg(target_os = "linux")]
 static EPOXY_LIBRARY: OnceLock<Option<libloading::os::unix::Library>> = OnceLock::new();
+#[cfg(target_os = "linux")]
+static LAST_RENDER_FRAMEBUFFER: AtomicI32 = AtomicI32::new(0);
+#[cfg(target_os = "linux")]
+static LAST_RENDER_STATUS: AtomicI32 = AtomicI32::new(0);
 
 const MPV_FORMAT_FLAG: c_int = 3;
 const MPV_FORMAT_INT64: c_int = 4;
@@ -103,6 +109,8 @@ const MPV_RENDER_UPDATE_FRAME: u64 = 1;
 const MPV_RENDER_API_TYPE_OPENGL: &str = "opengl";
 #[cfg(target_os = "linux")]
 const GL_RGBA8: c_int = 0x8058;
+#[cfg(target_os = "linux")]
+const GL_FRAMEBUFFER_BINDING: c_int = 0x8CA6;
 const MPV_CREATE_FAILURE_MESSAGE: &str =
     "Failed to create libmpv handle. libmpv returns NULL when allocation fails or LC_NUMERIC is not C.";
 
@@ -759,8 +767,10 @@ impl MpvRenderContext {
         area.attach_buffers();
         let width = area.allocated_width().max(1);
         let height = area.allocated_height().max(1);
+        let framebuffer = current_gl_framebuffer();
+        LAST_RENDER_FRAMEBUFFER.store(framebuffer, Ordering::SeqCst);
         let mut fbo = MpvOpenGlFbo {
-            fbo: 0,
+            fbo: framebuffer,
             width,
             height,
             internal_format: GL_RGBA8,
@@ -784,6 +794,7 @@ impl MpvRenderContext {
         unsafe {
             let _ = (self.api.mpv_render_context_update)(self.as_ptr());
             let status = (self.api.mpv_render_context_render)(self.as_ptr(), params.as_mut_ptr());
+            LAST_RENDER_STATUS.store(status, Ordering::SeqCst);
             if status >= 0 {
                 (self.api.mpv_render_context_report_swap)(self.as_ptr());
             }
@@ -1213,6 +1224,31 @@ unsafe extern "C" fn mpv_render_update_callback(_context: *mut c_void) {
 }
 
 #[cfg(target_os = "linux")]
+fn current_gl_framebuffer() -> c_int {
+    let address = unsafe { mpv_gl_get_proc_address(ptr::null_mut(), c"glGetIntegerv".as_ptr()) };
+    if address.is_null() {
+        return 0;
+    }
+
+    let gl_get_integerv = unsafe { std::mem::transmute::<*mut c_void, GlGetIntegerv>(address) };
+    let mut framebuffer = 0;
+    unsafe {
+        gl_get_integerv(GL_FRAMEBUFFER_BINDING, &mut framebuffer);
+    }
+    framebuffer
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn native_video_render_framebuffer() -> i32 {
+    LAST_RENDER_FRAMEBUFFER.load(Ordering::SeqCst)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn native_video_render_status() -> i32 {
+    LAST_RENDER_STATUS.load(Ordering::SeqCst)
+}
+
+#[cfg(target_os = "linux")]
 unsafe extern "C" fn mpv_gl_get_proc_address(
     _context: *mut c_void,
     name: *const c_char,
@@ -1290,6 +1326,7 @@ pub(crate) fn refresh_state(play_session_id: &str) -> Result<PlaybackStateResult
     Ok(state)
 }
 
+#[cfg(test)]
 pub(crate) fn state(play_session_id: &str) -> Result<PlaybackStateResult, String> {
     if let Some(state) = cached_state(play_session_id)? {
         return Ok(state);
@@ -1311,6 +1348,7 @@ pub(crate) fn cache_state(play_session_id: &str, state: PlaybackStateResult) {
     }
 }
 
+#[cfg(test)]
 fn cached_state(play_session_id: &str) -> Result<Option<PlaybackStateResult>, String> {
     PROGRESS_STATES
         .get_or_init(|| Mutex::new(HashMap::new()))
@@ -1998,6 +2036,8 @@ mod tests {
         assert_eq!(MPV_RENDER_PARAM_WL_DISPLAY, 9);
         assert_eq!(MPV_RENDER_UPDATE_FRAME, 1);
         assert_eq!(MPV_RENDER_API_TYPE_OPENGL, "opengl");
+        #[cfg(target_os = "linux")]
+        assert_eq!(GL_FRAMEBUFFER_BINDING, 0x8CA6);
     }
 
     #[test]
