@@ -36,6 +36,8 @@ pub(crate) fn map_item(server: &SavedServer, item: ApiItem) -> MediaItem {
         .and_then(|data| data.played_percentage);
     MediaItem {
         id: item.id.clone(),
+        server_id: server.id.clone(),
+        server_name: server.name.clone(),
         name: item.name.unwrap_or_else(|| "Untitled".to_string()),
         item_type: item.item_type.unwrap_or_else(|| "Item".to_string()),
         year: item.production_year,
@@ -112,6 +114,8 @@ pub(crate) fn map_search_hint(server: &SavedServer, hint: SearchHint) -> Option<
 
     Some(MediaItem {
         id,
+        server_id: server.id.clone(),
+        server_name: server.name.clone(),
         name: hint
             .name
             .or(hint.matched_term)

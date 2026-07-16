@@ -401,6 +401,9 @@ pub(crate) fn get_media_versions(
                 .find(|stream| stream.stream_type.as_deref() == Some("Audio"));
             MediaVersion {
                 id,
+                item_id: item_id.to_string(),
+                server_id: server.id.clone(),
+                server_name: server.name.clone(),
                 name: media_version_name(source.name, source.container.clone(), index),
                 container: source.container,
                 path: source.path,

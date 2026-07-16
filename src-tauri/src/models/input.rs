@@ -32,6 +32,7 @@ pub(crate) struct LibraryFiltersInput {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ItemInput {
     pub(crate) item_id: String,
+    pub(crate) server_id: Option<String>,
     pub(crate) media_source_id: Option<String>,
     pub(crate) audio_stream_index: Option<i32>,
     pub(crate) subtitle_stream_index: Option<i32>,
@@ -54,6 +55,7 @@ pub(crate) struct PlaybackStateInput {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SavePlaybackPreferenceInput {
+    pub(crate) server_id: Option<String>,
     pub(crate) item_id: String,
     pub(crate) series_id: Option<String>,
     pub(crate) media_source_id: Option<String>,
@@ -81,6 +83,7 @@ pub(crate) struct PlaybackStateResult {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MarkInput {
     pub(crate) item_id: String,
+    pub(crate) server_id: Option<String>,
     pub(crate) value: bool,
 }
 

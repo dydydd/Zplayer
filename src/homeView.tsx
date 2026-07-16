@@ -49,8 +49,8 @@ export function HomeView({
   onOpenFavorites: () => void;
   onActivateServer: (id: string) => Promise<void>;
   onOpenLibrary: (id: string) => void;
-  onOpenItem: (id: string) => void;
-  onPlay: (id: string) => Promise<void>;
+  onOpenItem: (id: string, serverId?: string | null) => void;
+  onPlay: (id: string, serverId?: string | null) => Promise<void>;
   serverMenuOpen: boolean;
   setServerMenuOpen: (open: boolean) => void;
   chromeVisible: boolean;
@@ -201,8 +201,8 @@ export function HomeView({
             <small>{itemMeta(featured)}</small>
             {featured.overview && <p>{featured.overview}</p>}
             <div className="feature-actions">
-              <button className="feature-play" onClick={() => void onPlay(featured.id)}><UiIcon name="play" className="play-glyph" />{t("home.play")}</button>
-              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id)} aria-label={t("home.detail")}><UiIcon name="info" /></button>
+              <button className="feature-play" onClick={() => void onPlay(featured.id, featured.serverId)}><UiIcon name="play" className="play-glyph" />{t("home.play")}</button>
+              <button className="round-icon info-icon" onClick={() => onOpenItem(featured.id, featured.serverId)} aria-label={t("home.detail")}><UiIcon name="info" /></button>
               <button className="round-icon add-icon" onClick={onOpenFavorites} aria-label={t("home.openFavorites")}><UiIcon name="heart" /></button>
               <button className="round-icon next-icon" onClick={() => setHeroIndex((index) => (index + 1) % Math.max(heroItems.length, 1))} aria-label={t("home.nextRecommendation")}><UiIcon name="chevron-right" /></button>
             </div>
@@ -211,7 +211,7 @@ export function HomeView({
           <div className="hero-dots">
             {heroItems.slice(0, 7).map((item, index) => (
               <button
-                key={item.id}
+                key={`${item.serverId ?? ""}:${item.id}`}
                 className={index === heroIndex % Math.max(heroItems.length, 1) ? "active" : ""}
                 onClick={() => setHeroIndex(index)}
                 aria-label={t("home.recommendationDot", { index: index + 1 })}
@@ -289,7 +289,7 @@ const MediaShelf = memo(function MediaShelf({
 }: {
   title: string;
   items: MediaItem[];
-  onOpenItem: (id: string) => void;
+  onOpenItem: (id: string, serverId?: string | null) => void;
   libraryId?: string;
   onOpenLibrary?: (id: string) => void;
   className?: string;
@@ -310,7 +310,7 @@ const MediaShelf = memo(function MediaShelf({
       />
       <ScrollableStage rowClassName="media-row" itemCount={items.length} floatingControls={floatingControls} scrollKey={`home:${libraryId ?? title}`}>
           {items.map((item, index) => (
-            <button key={item.id} className={`apple-card ${poster ? "poster-card" : ""} ${showProgress ? "with-progress" : ""}`} onClick={() => onOpenItem(item.id)}>
+            <button key={`${item.serverId ?? ""}:${item.id}`} className={`apple-card ${poster ? "poster-card" : ""} ${showProgress ? "with-progress" : ""}`} onClick={() => onOpenItem(item.id, item.serverId)}>
               <Image
                 src={poster ? item.primaryImageUrl : item.backdropUrl ?? item.primaryImageUrl}
                 alt={item.name}

@@ -97,6 +97,14 @@ pub(crate) fn active_server(app: &AppHandle) -> Result<SavedServer, String> {
         .ok_or_else(|| "No active server. Add or select a server first.".to_string())
 }
 
+pub(crate) fn server_by_id(app: &AppHandle, server_id: &str) -> Result<SavedServer, String> {
+    load_store(app)?
+        .servers
+        .into_iter()
+        .find(|server| server.id == server_id)
+        .ok_or_else(|| "Server not found.".to_string())
+}
+
 pub(crate) fn settings(app: &AppHandle) -> Result<AppSettings, String> {
     Ok(load_store(app)?.settings)
 }

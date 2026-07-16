@@ -40,21 +40,21 @@ export const ipc = {
     sortOrder: LibrarySortOrder,
     filters: LibraryFilters = {},
   ) => invoke<LibraryPayload>("load_library", { input: { libraryId, startIndex, limit, itemType, sortBy, sortOrder, filters } }),
-  loadItem: (itemId: string) => invoke<ItemDetailPayload>("load_item", { input: { itemId } }),
-  loadItemMore: (itemId: string) => invoke<ItemMorePayload>("load_item_more", { input: { itemId } }),
-  loadMediaSources: (itemId: string) => invoke<ItemDetailPayload["mediaSources"]>("load_media_sources", { input: { itemId } }),
+  loadItem: (itemId: string, serverId?: string | null) => invoke<ItemDetailPayload>("load_item", { input: { itemId, serverId } }),
+  loadItemMore: (itemId: string, serverId?: string | null) => invoke<ItemMorePayload>("load_item_more", { input: { itemId, serverId } }),
+  loadMediaSources: (itemId: string, serverId?: string | null) => invoke<ItemDetailPayload["mediaSources"]>("load_media_sources", { input: { itemId, serverId } }),
   testServerLogin: (input: ServerForm) => invoke<LoginResult>("test_server_login", { input }),
   saveServer: (input: LoginResult) => invoke<SavedServer>("save_server", { input }),
   setActiveServer: (serverId: string) => invoke<SavedServer>("set_active_server", { input: { serverId } }),
   deleteServer: (serverId: string) => invoke<void>("delete_server", { input: { serverId } }),
-  playItem: (itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, subtitleStreamPosition?: number) =>
-    invoke<PlayResult>("play_item", { input: { itemId, mediaSourceId, audioStreamIndex, subtitleStreamIndex, subtitleStreamPosition } }),
+  playItem: (itemId: string, serverId?: string | null, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, subtitleStreamPosition?: number) =>
+    invoke<PlayResult>("play_item", { input: { itemId, serverId, mediaSourceId, audioStreamIndex, subtitleStreamIndex, subtitleStreamPosition } }),
   controlPlayback: (playSessionId: string, command: PlaybackCommand) =>
     invoke("control_playback", { input: { playSessionId, command } }),
   savePlaybackPreference: (input: PlaybackPreferenceInput) => invoke<void>("save_playback_preference", { input }),
   loadPlaybackPreferences: () => invoke<Record<string, PlaybackPreference>>("load_playback_preferences"),
-  markFavorite: (itemId: string, value: boolean) => invoke<void>("mark_favorite", { input: { itemId, value } }),
-  markPlayed: (itemId: string, value: boolean) => invoke<void>("mark_played", { input: { itemId, value } }),
+  markFavorite: (itemId: string, value: boolean, serverId?: string | null) => invoke<void>("mark_favorite", { input: { itemId, serverId, value } }),
+  markPlayed: (itemId: string, value: boolean, serverId?: string | null) => invoke<void>("mark_played", { input: { itemId, serverId, value } }),
   fetchServerName: (input: Pick<ServerForm, "url" | "serverType" | "useSystemProxy">) =>
     invoke<{ name: string }>("fetch_server_name", { input }),
 };

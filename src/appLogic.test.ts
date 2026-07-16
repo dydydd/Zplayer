@@ -38,10 +38,25 @@ test("finds items from the favorites home shelf", () => {
     recentItems: [],
   } as HomePayload;
 
-  assert.equal(findKnownItem("fav-1", home, null, null), item);
+  assert.equal(findKnownItem("fav-1", undefined, home, null, null), item);
 });
 
-function mediaItem(item: Pick<MediaItem, "id" | "name">): MediaItem {
+test("disambiguates known items by server id", () => {
+  const first = mediaItem({ id: "same-id", name: "First", serverId: "server-a" });
+  const second = mediaItem({ id: "same-id", name: "Second", serverId: "server-b" });
+  const home = {
+    latest: [first, second],
+    recommendedMovies: [],
+    recommendedShows: [],
+    resumeItems: [],
+    favoriteItems: [],
+    recentItems: [],
+  } as HomePayload;
+
+  assert.equal(findKnownItem("same-id", "server-b", home, null, null), second);
+});
+
+function mediaItem(item: Pick<MediaItem, "id" | "name"> & Partial<Pick<MediaItem, "serverId" | "serverName">>): MediaItem {
   return {
     ...item,
     itemType: "Movie",

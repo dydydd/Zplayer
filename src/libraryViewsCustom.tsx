@@ -24,7 +24,7 @@ export function LibraryView({
   title?: string;
   loadingMore: boolean;
   onBack: () => void;
-  onOpenItem: (id: string) => void;
+  onOpenItem: (id: string, serverId?: string | null) => void;
   onLoadMore: () => void;
   itemType: LibraryItemType;
   sortBy: LibrarySortBy;
@@ -97,7 +97,7 @@ export function LibraryView({
       {!payload.items.length && !loadingMore && <EmptyState title={t("library.empty")} />}
       <div className={`poster-grid poster-density-${posterDensity}`} ref={gridRef}>
         {payload.items.map((item) => (
-          <Poster key={item.id} item={item} onOpen={onOpenItem} hideMeta onToggleFavorite={onToggleFavorite} onTogglePlayed={onTogglePlayed} />
+          <Poster key={`${item.serverId ?? ""}:${item.id}`} item={item} onOpen={onOpenItem} hideMeta onToggleFavorite={onToggleFavorite} onTogglePlayed={onTogglePlayed} />
         ))}
       </div>
       {loadingMore && <div className="loading-more">{t("library.loadingMore")}</div>}
@@ -178,7 +178,7 @@ export function SearchOverlay({
   posterDensity: PosterDensity;
   recentTerms: string[];
   onUseRecentTerm: (term: string) => void;
-  onOpen: (id: string) => void;
+  onOpen: (id: string, serverId?: string | null) => void;
 }) {
   const { t } = useTranslation();
   const trimmedQuery = query.trim();
@@ -206,7 +206,7 @@ export function SearchOverlay({
       {!loading && trimmedQuery && !results.length && <EmptyState title={t("library.tryAnother")} />}
       <div className={`poster-grid poster-density-${posterDensity} ${loading ? "is-loading" : ""}`}>
         {results.map((item) => (
-          <Poster key={item.id} item={item} onOpen={onOpen} />
+          <Poster key={`${item.serverId ?? ""}:${item.id}`} item={item} onOpen={onOpen} />
         ))}
       </div>
     </div>

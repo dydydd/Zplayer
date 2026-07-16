@@ -6,10 +6,12 @@ export type View =
   | { name: "settings" }
   | { name: "home" }
   | { name: "library"; id: string; title?: string; itemType?: LibraryItemType; sortBy?: LibrarySortBy; sortOrder?: LibrarySortOrder; filters?: LibraryFilters }
-  | { name: "detail"; id: string }
+  | { name: "detail"; id: string; serverId?: string | null }
   | {
       name: "player";
       itemId: string;
+      serverId?: string | null;
+      serverName?: string | null;
       title: string;
       playSessionId?: string | null;
       mediaSourceId?: string | null;
@@ -147,6 +149,8 @@ export type MediaLibrary = {
 
 export type MediaItem = {
   id: string;
+  serverId?: string | null;
+  serverName?: string | null;
   name: string;
   itemType: string;
   year?: number | null;
@@ -232,6 +236,9 @@ export type ItemMorePayload = {
 
 export type MediaVersion = {
   id: string;
+  itemId?: string | null;
+  serverId?: string | null;
+  serverName?: string | null;
   name: string;
   container?: string | null;
   path?: string | null;
@@ -294,6 +301,8 @@ export type MediaArt = {
 
 export type PlayResult = {
   itemId: string;
+  serverId?: string | null;
+  serverName?: string | null;
   mediaSourceId?: string | null;
   playSessionId: string;
   url: string;
@@ -315,6 +324,7 @@ export type PlaybackState = {
 };
 
 export type PlaybackPreferenceInput = {
+  serverId?: string | null;
   itemId: string;
   seriesId?: string | null;
   mediaSourceId?: string | null;
@@ -324,7 +334,7 @@ export type PlaybackPreferenceInput = {
   subtitleLanguage?: string | null;
 };
 
-export type PlaybackPreference = Omit<PlaybackPreferenceInput, "itemId" | "seriesId">;
+export type PlaybackPreference = Omit<PlaybackPreferenceInput, "serverId" | "itemId" | "seriesId">;
 
 export type ServerForm = {
   serverType: "emby" | "jellyfin";

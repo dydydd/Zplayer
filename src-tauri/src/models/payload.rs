@@ -78,6 +78,8 @@ pub(crate) struct ItemMorePayload {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PlayResult {
     pub(crate) item_id: String,
+    pub(crate) server_id: String,
+    pub(crate) server_name: String,
     pub(crate) media_source_id: Option<String>,
     pub(crate) play_session_id: String,
     pub(crate) url: String,

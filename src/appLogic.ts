@@ -15,11 +15,13 @@ export function collectionLibraryView(collectionId: string, title: string): View
 
 export function findKnownItem(
   itemId: string,
+  serverId: string | null | undefined,
   home: HomePayload | null,
   library: LibraryPayload | null,
   detail: ItemDetailPayload | null,
 ) {
   const rows: MediaItem[] = [
+    ...(detail?.item ? [detail.item] : []),
     ...(home?.latest ?? []),
     ...(home?.recommendedMovies ?? []),
     ...(home?.recommendedShows ?? []),
@@ -31,7 +33,7 @@ export function findKnownItem(
     ...(detail?.children ?? []),
     ...(detail?.similar ?? []),
   ];
-  return rows.find((item) => item.id === itemId);
+  return rows.find((item) => item.id === itemId && (!serverId || !item.serverId || item.serverId === serverId));
 }
 
 export type EpisodePlaybackContext = {
@@ -57,6 +59,10 @@ export function playbackPreferenceKey(itemId: string, seriesId?: string | null) 
   return seriesId ? `series:${seriesId}` : `item:${itemId}`;
 }
 
+export function scopedPlaybackPreferenceKey(serverId: string | null | undefined, itemId: string, seriesId?: string | null) {
+  return `${serverId ?? ""}:${playbackPreferenceKey(itemId, seriesId)}`;
+}
+
 export function preferredStreamIndex(
   streams: { index?: number | null; language?: string | null }[],
   preferredIndex?: number | null,
@@ -70,6 +76,7 @@ export function preferredStreamIndex(
 }
 
 export function preferencePayload(
+  serverId: string | null | undefined,
   itemId: string,
   seriesId: string | null | undefined,
   source: MediaVersion | undefined,
@@ -79,6 +86,7 @@ export function preferencePayload(
   const audio = source?.audioStreams.find((stream) => stream.index === audioIndex);
   const subtitle = source?.subtitleStreams.find((stream) => stream.index === subtitleIndex);
   return {
+    serverId,
     itemId,
     seriesId,
     mediaSourceId: source?.id,

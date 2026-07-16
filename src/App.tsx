@@ -11,7 +11,7 @@ import { TopBar } from "./TopBar";
 import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
 import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
-import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, playbackPreferenceKey, preferencePayload, preferredStreamIndex, relativeEpisodeId } from "./appLogic";
+import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, preferencePayload, preferredStreamIndex, relativeEpisodeId, scopedPlaybackPreferenceKey } from "./appLogic";
 import "./App.css";
 
 type HistoryEntry = {
@@ -21,6 +21,7 @@ type HistoryEntry = {
 
 type PlaybackStoppedEvent = {
   itemId: string;
+  serverId?: string | null;
   playSessionId: string;
   failed: boolean;
   completed: boolean;
@@ -70,9 +71,19 @@ function optimisticPlaybackState(current: PlaybackState | null, command: Playbac
   return current;
 }
 
-function mediaSourceForPlayback(sources: MediaVersion[] | undefined, mediaSourceId?: string) {
+function itemCacheKey(itemId: string, serverId?: string | null) {
+  return `${serverId ?? ""}:${itemId}`;
+}
+
+function mediaSourceForPlayback(sources: MediaVersion[] | undefined, mediaSourceId?: string, serverId?: string | null) {
   if (!sources?.length) return undefined;
-  return sources.find((source) => source.id === mediaSourceId) ?? sources[0];
+  return sources.find((source) => source.id === mediaSourceId && (!serverId || !source.serverId || source.serverId === serverId))
+    ?? sources.find((source) => !serverId || !source.serverId || source.serverId === serverId)
+    ?? sources[0];
+}
+
+function sourceMatchesView(source: MediaVersion, mediaSourceId?: string | null, serverId?: string | null) {
+  return source.id === mediaSourceId && (!serverId || !source.serverId || source.serverId === serverId);
 }
 
 function defaultSubtitleSelection(source?: MediaVersion): SubtitleSelection {
@@ -198,7 +209,12 @@ function App() {
       return;
     }
     ipc.loadPlaybackPreferences()
-      .then(setPlaybackPreferences)
+      .then((preferences) => {
+        const scoped = Object.fromEntries(
+          Object.entries(preferences).map(([key, value]) => [`${activeServer.id}:${key}`, value]),
+        );
+        setPlaybackPreferences(scoped);
+      })
       .catch(() => setPlaybackPreferences({}));
   }, [activeServer?.id]);
 
@@ -302,7 +318,7 @@ function App() {
       void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
     }
     if (view.name === "detail") {
-      void loadDetail(view.id);
+      void loadDetail(view.id, view.serverId);
     }
   }, [view]);
 
@@ -368,13 +384,13 @@ function App() {
   useEffect(() => {
     if (view.name !== "player") return;
     if (playerSources.length) return;
-    const cached = detailCache.current.get(view.itemId) ?? (detail?.item.id === view.itemId ? detail : null);
+    const cached = detailCache.current.get(itemCacheKey(view.itemId, view.serverId)) ?? (detail?.item.id === view.itemId && (!view.serverId || detail.item.serverId === view.serverId) ? detail : null);
     if (cached?.mediaSources.length) {
       setPlayerSources(cached.mediaSources);
       return;
     }
     let cancelled = false;
-    ipc.loadMediaSources(view.itemId)
+    ipc.loadMediaSources(view.itemId, view.serverId)
       .then((sources) => {
         if (!cancelled) setPlayerSources(sources);
       })
@@ -384,7 +400,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [view, detail?.item.id, playerSources.length]);
+  }, [view, detail?.item.id, detail?.item.serverId, playerSources.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -392,7 +408,7 @@ function App() {
 
     listen<PlaybackStoppedEvent>("playback-stopped", (event) => {
       if (cancelled) return;
-      invalidatePlaybackCaches(event.payload.itemId);
+      invalidatePlaybackCaches(event.payload.itemId, event.payload.serverId);
       const currentView = viewRef.current;
       if (event.payload.playSessionId === exitingPlaybackSession.current) {
         exitingPlaybackSession.current = "";
@@ -500,10 +516,10 @@ function App() {
     });
   }
 
-  function invalidatePlaybackCaches(itemId?: string | null) {
+  function invalidatePlaybackCaches(itemId?: string | null, serverId?: string | null) {
     homeCache.current.clear();
     libraryCache.current.clear();
-    if (itemId) detailCache.current.delete(itemId);
+    if (itemId) detailCache.current.delete(itemCacheKey(itemId, serverId));
   }
 
   function refreshAfterPlaybackStop(itemId?: string | null, targetView: View = viewRef.current) {
@@ -511,7 +527,7 @@ function App() {
     if (currentView.name === "home") {
       void loadHome();
     } else if (currentView.name === "detail") {
-      void loadDetail(currentView.id, true);
+      void loadDetail(currentView.id, currentView.serverId, true);
     } else if (itemId) {
       void loadHome();
     }
@@ -633,44 +649,45 @@ function App() {
     }
   }, [library, libraryLoadingMore, resolvedSettings.metadataCacheEnabled, view]);
 
-  async function loadDetail(itemId: string, refresh = false) {
-    const cached = resolvedSettings.metadataCacheEnabled ? detailCache.current.get(itemId) : null;
+  async function loadDetail(itemId: string, serverId?: string | null, refresh = false) {
+    const key = itemCacheKey(itemId, serverId);
+    const cached = resolvedSettings.metadataCacheEnabled ? detailCache.current.get(key) : null;
     if (cached && !refresh) {
       setDetail(cached);
       if (!cached.people.length && !cached.art.length && !cached.similar.length) {
         const currentRequest = ++requestId.current;
-        void loadDetailMore(itemId, currentRequest);
+        void loadDetailMore(itemId, serverId, currentRequest);
       }
-      void refreshDetailInBackground(itemId);
+      void refreshDetailInBackground(itemId, serverId);
       return;
     }
     if (refresh) {
-      detailCache.current.delete(itemId);
+      detailCache.current.delete(key);
     }
     const currentRequest = ++requestId.current;
     const result = await run(t("loading.detail"), () =>
-      ipc.loadItem(itemId),
+      ipc.loadItem(itemId, serverId),
     );
     if (result && currentRequest === requestId.current) {
-      if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemId, result);
+      if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemCacheKey(itemId, result.item.serverId ?? serverId), result);
       setDetail(result);
-      void loadDetailMore(itemId, currentRequest);
+      void loadDetailMore(itemId, result.item.serverId ?? serverId, currentRequest);
     }
   }
 
-  async function loadDetailMore(itemId: string, parentRequest: number) {
+  async function loadDetailMore(itemId: string, serverId: string | null | undefined, parentRequest: number) {
     try {
-      const more = await ipc.loadItemMore(itemId);
+      const more = await ipc.loadItemMore(itemId, serverId);
       if (parentRequest !== requestId.current || more.itemId !== itemId) return;
       setDetail((current) => {
-        if (!current || current.item.id !== itemId) return current;
+        if (!current || current.item.id !== itemId || (serverId && current.item.serverId !== serverId)) return current;
         const next = {
           ...current,
           people: more.people,
           art: more.art,
           similar: more.similar,
         };
-        if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemId, next);
+        if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemCacheKey(itemId, current.item.serverId ?? serverId), next);
         return next;
       });
     } catch {
@@ -678,13 +695,13 @@ function App() {
     }
   }
 
-  async function refreshDetailInBackground(itemId: string) {
+  async function refreshDetailInBackground(itemId: string, serverId?: string | null) {
     try {
-      const result = await ipc.loadItem(itemId);
-      if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemId, result);
-      if (viewRef.current.name === "detail" && viewRef.current.id === itemId) {
+      const result = await ipc.loadItem(itemId, serverId);
+      if (resolvedSettings.metadataCacheEnabled) detailCache.current.set(itemCacheKey(itemId, result.item.serverId ?? serverId), result);
+      if (viewRef.current.name === "detail" && viewRef.current.id === itemId && (!viewRef.current.serverId || viewRef.current.serverId === (result.item.serverId ?? serverId))) {
         setDetail(result);
-        void loadDetailMore(itemId, requestId.current);
+        void loadDetailMore(itemId, result.item.serverId ?? serverId, requestId.current);
       }
     } catch {
       // ponytail: keep last detail while the server refresh catches up.
@@ -780,29 +797,32 @@ function App() {
 
   async function toggleItemFavorite(item: MediaItem) {
     const nextValue = !item.favorite;
-    const result = await run(nextValue ? t("loading.favoriteMedia") : t("loading.unfavoriteMedia"), () => ipc.markFavorite(item.id, nextValue));
+    const result = await run(nextValue ? t("loading.favoriteMedia") : t("loading.unfavoriteMedia"), () => ipc.markFavorite(item.id, nextValue, item.serverId));
     if (result !== null) {
-      invalidatePlaybackCaches(item.id);
+      invalidatePlaybackCaches(item.id, item.serverId);
       if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
     }
   }
 
   async function toggleItemPlayed(item: MediaItem) {
     const nextValue = !item.played;
-    const result = await run(nextValue ? t("loading.markPlayed") : t("loading.markUnplayed"), () => ipc.markPlayed(item.id, nextValue));
+    const result = await run(nextValue ? t("loading.markPlayed") : t("loading.markUnplayed"), () => ipc.markPlayed(item.id, nextValue, item.serverId));
     if (result !== null) {
-      invalidatePlaybackCaches(item.id);
+      invalidatePlaybackCaches(item.id, item.serverId);
       if (view.name === "library") void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
     }
   }
 
-  async function play(itemId: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) {
-    const knownItem = findKnownItem(itemId, home, library, detail);
+  async function play(itemId: string, serverId?: string | null, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) {
+    const knownItem = findKnownItem(itemId, serverId, home, library, detail);
     const title = detail?.item.id === itemId
       ? detail.item.name
       : knownItem?.name ?? t("player.playingTitle");
-    const preference = playbackPreferences[playbackPreferenceKey(itemId, knownItem?.seriesId)];
-    const source = mediaSourceForPlayback(sources, mediaSourceId ?? preference?.mediaSourceId ?? undefined);
+    const requestedServerId = serverId ?? knownItem?.serverId ?? activeServer?.id;
+    const preference = playbackPreferences[scopedPlaybackPreferenceKey(requestedServerId, itemId, knownItem?.seriesId)];
+    const source = mediaSourceForPlayback(sources, mediaSourceId ?? preference?.mediaSourceId ?? undefined, requestedServerId);
+    const playbackItemId = source?.itemId ?? itemId;
+    const playbackServerId = source?.serverId ?? requestedServerId;
     const preferredAudioIndex = audioStreamIndex ?? preferredStreamIndex(source?.audioStreams ?? [], preference?.audioStreamIndex, preference?.audioLanguage);
     const preferredSubtitleIndex = subtitleStreamIndex ?? preferredStreamIndex(source?.subtitleStreams ?? [], preference?.subtitleStreamIndex, preference?.subtitleLanguage);
     const subtitleSelection = resolveSubtitleSelection(source, preferredSubtitleIndex, resolvedSettings.subtitleMode);
@@ -821,7 +841,8 @@ function App() {
     setForm(emptyForm);
     const result = await run(t("loading.startMpv"), () =>
       ipc.playItem(
-        itemId,
+        playbackItemId,
+        playbackServerId,
         source?.id ?? mediaSourceId,
         preferredAudioIndex,
         subtitleSelection.subtitleStreamIndex,
@@ -830,10 +851,13 @@ function App() {
     );
     if (result) {
       if (resolvedSettings.diagnosticsEnabled) setLastPlayResult(result);
-      const episodeContext = episodeIds ? episodePlaybackContext(result.itemId, episodeIds) : null;
+      const resultServerId = result.serverId ?? playbackServerId ?? null;
+      const episodeContext = episodeIds && resultServerId === requestedServerId ? episodePlaybackContext(result.itemId, episodeIds) : null;
       const playerView: View = {
         name: "player",
         itemId: result.itemId,
+        serverId: resultServerId,
+        serverName: result.serverName ?? source?.serverName ?? knownItem?.serverName ?? null,
         title,
         playSessionId: result.playSessionId,
         mediaSourceId: result.mediaSourceId ?? source?.id ?? mediaSourceId ?? null,
@@ -847,8 +871,9 @@ function App() {
         openView(playerView);
       }
       rememberPlaybackPreference(preferencePayload(
+        resultServerId,
         result.itemId,
-        findKnownItem(result.itemId, home, library, detail)?.seriesId,
+        findKnownItem(result.itemId, resultServerId, home, library, detail)?.seriesId,
         source,
         preferredAudioIndex,
         subtitleSelection.subtitleStreamIndex,
@@ -870,33 +895,34 @@ function App() {
       exitingPlaybackSession.current = currentView.playSessionId;
       void ipc.controlPlayback(currentView.playSessionId, "stop").catch(() => {});
     }
-    await play(nextItemId, undefined, undefined, undefined, undefined, context?.episodeIds);
+    await play(nextItemId, currentView.name === "player" ? currentView.serverId : undefined, undefined, undefined, undefined, undefined, context?.episodeIds);
   }
   playRelativeEpisodeRef.current = playRelativeEpisode;
 
-  async function switchPlayerSource(sourceId?: string) {
+  async function switchPlayerSource(sourceId?: string, sourceServerId?: string | null) {
     if (view.name !== "player") return;
     if (!view.playSessionId) return;
-    const sourceDetail = detailCache.current.get(view.itemId) ?? (detail?.item.id === view.itemId ? detail : null);
+    const sourceDetail = detailCache.current.get(itemCacheKey(view.itemId, view.serverId)) ?? (detail?.item.id === view.itemId && (!view.serverId || detail.item.serverId === view.serverId) ? detail : null);
     const sources = playerSources.length ? playerSources : sourceDetail?.mediaSources ?? [];
     if (sources.length < 2) {
       setError(t("errors.noOtherVersion"));
       return;
     }
 
-    const currentIndex = sources.findIndex((source) => source.id === view.mediaSourceId);
+    const currentIndex = sources.findIndex((source) => sourceMatchesView(source, view.mediaSourceId, view.serverId));
     const nextSource = sourceId
-      ? sources.find((source) => source.id === sourceId)
+      ? sources.find((source) => source.id === sourceId && (!sourceServerId || !source.serverId || source.serverId === sourceServerId))
       : sources[(currentIndex + 1 + sources.length) % sources.length];
     if (!nextSource) return;
     exitingPlaybackSession.current = view.playSessionId;
-    invalidatePlaybackCaches(view.itemId);
+    invalidatePlaybackCaches(view.itemId, view.serverId);
     setPlaybackState(null);
     setPlayerTransparent(false);
     void ipc.controlPlayback(view.playSessionId, "stop").catch(() => {});
     const subtitleSelection = resolveSubtitleSelection(nextSource, undefined, resolvedSettings.subtitleMode);
     const result = await run(t("loading.switchSource"), () => ipc.playItem(
-      view.itemId,
+      nextSource.itemId ?? view.itemId,
+      nextSource.serverId ?? view.serverId,
       nextSource.id,
       undefined,
       subtitleSelection.subtitleStreamIndex,
@@ -904,19 +930,23 @@ function App() {
     ));
     if (result) {
       if (resolvedSettings.diagnosticsEnabled) setLastPlayResult(result);
+      const switchedServerId = result.serverId ?? nextSource.serverId ?? view.serverId ?? null;
       setView({
         name: "player",
         itemId: result.itemId,
+        serverId: switchedServerId,
+        serverName: result.serverName ?? nextSource.serverName ?? view.serverName ?? null,
         title: view.title,
         playSessionId: result.playSessionId,
         mediaSourceId: result.mediaSourceId ?? nextSource.id,
         subtitleStreamIndex: subtitleSelection.subtitleStreamIndex ?? null,
-        episodeIds: view.episodeIds ?? null,
-        episodeIndex: view.episodeIndex ?? null,
+        episodeIds: switchedServerId === view.serverId ? view.episodeIds ?? null : null,
+        episodeIndex: switchedServerId === view.serverId ? view.episodeIndex ?? null : null,
       });
       rememberPlaybackPreference(preferencePayload(
+        switchedServerId,
         result.itemId,
-        findKnownItem(result.itemId, home, library, detail)?.seriesId,
+        findKnownItem(result.itemId, switchedServerId, home, library, detail)?.seriesId,
         nextSource,
         undefined,
         subtitleSelection.subtitleStreamIndex,
@@ -927,7 +957,7 @@ function App() {
   function rememberPlaybackPreference(input: PlaybackPreferenceInput) {
     setPlaybackPreferences((current) => ({
       ...current,
-      [playbackPreferenceKey(input.itemId, input.seriesId)]: {
+      [scopedPlaybackPreferenceKey(input.serverId, input.itemId, input.seriesId)]: {
         mediaSourceId: input.mediaSourceId,
         audioStreamIndex: input.audioStreamIndex,
         audioLanguage: input.audioLanguage,
@@ -1038,7 +1068,7 @@ function App() {
     setLibrary(null);
     openView(collectionLibraryView(collectionId, title));
   }, [openView]);
-  const openDetail = useCallback((id: string) => openView({ name: "detail", id }), [openView]);
+  const openDetail = useCallback((id: string, serverId?: string | null) => openView({ name: "detail", id, serverId }), [openView]);
 
   function rememberSearchTerm(query: string) {
     const term = query.trim();
@@ -1054,15 +1084,16 @@ function App() {
     });
   }
 
-  const openSearchResult = useCallback((itemId: string) => {
+  const openSearchResult = useCallback((itemId: string, serverId?: string | null) => {
     rememberSearchTerm(searchQuery);
     setSearchQuery("");
     setSearchOpen(false);
-    openDetail(itemId);
+    openDetail(itemId, serverId);
   }, [openDetail, searchQuery]);
 
   const detailMatchesView = view.name === "detail" && !!detail && (
-    detail.item.id === view.id || detail.episodes.some((episode) => episode.id === view.id)
+    (!view.serverId || detail.item.serverId === view.serverId)
+    && (detail.item.id === view.id || detail.episodes.some((episode) => episode.id === view.id))
   );
   const showContent = !searchOpen && !searchQuery.trim();
   const waylandCompositor = !!linuxWindowDiagnostics?.waylandRequired && linuxWindowDiagnostics.waylandDisplaySet;
@@ -1170,7 +1201,7 @@ function App() {
             onBack={goBack}
             onOpenItem={openDetail}
             onPlay={play}
-            onRefresh={() => loadDetail(detail.item.id, true)}
+            onRefresh={() => loadDetail(detail.item.id, detail.item.serverId, true)}
             onError={setError}
             onOpenGenre={openGenre}
             onOpenPerson={openPerson}
@@ -1198,13 +1229,15 @@ function App() {
             seekForwardSeconds={resolvedSettings.seekForwardSeconds}
             sources={playerSources}
             currentSourceId={view.mediaSourceId ?? null}
+            currentServerId={view.serverId ?? null}
             initialSubtitleIndex={view.subtitleStreamIndex ?? undefined}
             onSwitchSource={switchPlayerSource}
             onPreferenceChange={(audioIndex, subtitleIndex) => {
-              const source = playerSources.find((entry) => entry.id === view.mediaSourceId) ?? playerSources[0];
+              const source = playerSources.find((entry) => sourceMatchesView(entry, view.mediaSourceId, view.serverId)) ?? playerSources[0];
               rememberPlaybackPreference(preferencePayload(
+                view.serverId,
                 view.itemId,
-                findKnownItem(view.itemId, home, library, detail)?.seriesId,
+                findKnownItem(view.itemId, view.serverId, home, library, detail)?.seriesId,
                 source,
                 audioIndex,
                 subtitleIndex,

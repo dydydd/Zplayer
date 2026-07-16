@@ -2,11 +2,11 @@ use crate::api;
 use crate::models::{
     normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
     HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryFiltersInput, LibraryInput,
-    LibraryLatestPayload, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaLibrary,
-    PlayResult, PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
-    ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
-    SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
-    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
+    LibraryLatestPayload, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaItem,
+    MediaLibrary, MediaVersion, PlayResult, PlaybackControlInput, PlaybackPreference,
+    PlaybackStateInput, PlaybackStateResult, ReportPlaybackProgressInput, ReportPlaybackStartInput,
+    ReportPlaybackStoppedInput, SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput,
+    SavedServer, SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
 };
 use crate::mpv;
 use crate::platform_window::{self, LinuxWindowDiagnostics};
@@ -14,6 +14,13 @@ use crate::store;
 use std::thread;
 use std::time::Duration;
 use tauri::AppHandle;
+
+fn server_for_input(app: &AppHandle, server_id: Option<&str>) -> Result<SavedServer, String> {
+    match server_id.filter(|value| !value.trim().is_empty()) {
+        Some(server_id) => store::server_by_id(app, server_id),
+        None => store::active_server(app),
+    }
+}
 
 #[tauri::command]
 pub(crate) async fn test_server_login(input: LoginInput) -> Result<LoginResult, String> {
@@ -335,6 +342,136 @@ fn load_recent_items(
         .collect()
 }
 
+fn load_aggregated_media_versions(
+    app: &AppHandle,
+    base_server: &SavedServer,
+    item: &MediaItem,
+) -> Vec<MediaVersion> {
+    let mut versions = api::http_client(base_server.use_system_proxy)
+        .and_then(|client| api::get_media_versions(&client, base_server, &item.id))
+        .unwrap_or_default();
+    let queries = version_search_queries(item);
+    if queries.is_empty() {
+        return versions;
+    }
+
+    let servers = store::servers(app).unwrap_or_default();
+    let mut remote_versions = thread::scope(|scope| {
+        servers
+            .iter()
+            .filter(|server| server.id != base_server.id)
+            .map(|server| {
+                scope.spawn(|| matching_item_versions(server, item, &queries).unwrap_or_default())
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .flat_map(|handle| handle.join().unwrap_or_default())
+            .collect::<Vec<_>>()
+    });
+    versions.append(&mut remote_versions);
+    versions
+}
+
+fn matching_item_versions(
+    server: &SavedServer,
+    target: &MediaItem,
+    queries: &[String],
+) -> Result<Vec<MediaVersion>, String> {
+    let client = api::http_client_with_timeout(server.use_system_proxy, Duration::from_secs(8))?;
+    for query in queries {
+        if let Some(candidate) = api::search_items(&client, server, query)?
+            .into_iter()
+            .find(|candidate| same_media_identity(target, candidate))
+        {
+            return api::get_media_versions(&client, server, &candidate.id);
+        }
+    }
+    Ok(Vec::new())
+}
+
+fn version_search_queries(item: &MediaItem) -> Vec<String> {
+    let mut queries = Vec::new();
+    if item.item_type.eq_ignore_ascii_case("Episode") {
+        if let Some(series_name) = item.series_name.as_deref() {
+            push_version_query(&mut queries, series_name);
+        }
+    }
+    push_version_query(&mut queries, &item.name);
+    queries
+}
+
+fn push_version_query(queries: &mut Vec<String>, value: &str) {
+    let query = value.trim();
+    if !query.is_empty() && !queries.iter().any(|existing| existing == query) {
+        queries.push(query.to_string());
+    }
+}
+
+fn same_media_identity(target: &MediaItem, candidate: &MediaItem) -> bool {
+    if target.item_type.eq_ignore_ascii_case("Episode") {
+        return candidate.item_type.eq_ignore_ascii_case("Episode")
+            && same_episode_identity(target, candidate);
+    }
+    compatible_item_type(&target.item_type, &candidate.item_type)
+        && same_text(&target.name, &candidate.name)
+        && same_year_when_known(target.year, candidate.year)
+}
+
+fn same_episode_identity(target: &MediaItem, candidate: &MediaItem) -> bool {
+    let same_season = match (target.season_number, candidate.season_number) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
+    };
+    let same_episode = match (target.episode_number, candidate.episode_number) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
+    };
+    let same_number = same_season && same_episode;
+    let same_series = target
+        .series_name
+        .as_deref()
+        .zip(candidate.series_name.as_deref())
+        .map(|(left, right)| same_text(left, right))
+        .unwrap_or(false);
+    if same_series && same_number {
+        return true;
+    }
+    same_text(&target.name, &candidate.name)
+        && same_series
+        && same_year_when_known(target.year, candidate.year)
+}
+
+fn compatible_item_type(left: &str, right: &str) -> bool {
+    let left = left.to_ascii_lowercase();
+    let right = right.to_ascii_lowercase();
+    left == right
+        || matches!(
+            (left.as_str(), right.as_str()),
+            ("movie", "video") | ("video", "movie")
+        )
+}
+
+fn same_year_when_known(left: Option<i64>, right: Option<i64>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => left == right,
+        _ => true,
+    }
+}
+
+fn same_text(left: &str, right: &str) -> bool {
+    let left = normalized_match_text(left);
+    !left.is_empty() && left == normalized_match_text(right)
+}
+
+fn normalized_match_text(value: &str) -> String {
+    value
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|ch| ch.is_alphanumeric())
+        .collect()
+}
+
 fn normalize_library_filters(input: Option<LibraryFiltersInput>) -> api::LibraryQueryFilters {
     let input = input.unwrap_or_default();
     api::LibraryQueryFilters {
@@ -458,7 +595,7 @@ pub(crate) async fn load_item(
 }
 
 fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload, String> {
-    let server = store::active_server(&app)?;
+    let server = server_for_input(&app, input.server_id.as_deref())?;
     let client = api::http_client(server.use_system_proxy)?;
     let raw = api::get_item_raw(&client, &server, &input.item_id)?;
     let entry_item = api::map_item(&server, raw.clone());
@@ -469,7 +606,6 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
         .and_then(|series_id| api::get_item_raw(&client, &server, series_id).ok())
         .unwrap_or_else(|| raw.clone());
     let item = api::map_item(&server, detail_raw.clone());
-    let item_id = input.item_id.clone();
     let series_id = if item.item_type == "Series" {
         Some(item.id.as_str())
     } else {
@@ -501,16 +637,12 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
                 .unwrap_or_default(),
         ))
     })?;
-    let selected_media_item_id = if raw.item_type.as_deref() == Some("Episode") {
-        item_id.as_str()
+    let selected_media_item = if raw.item_type.as_deref() == Some("Episode") {
+        entry_item.clone()
     } else {
-        episodes
-            .first()
-            .map(|episode| episode.id.as_str())
-            .unwrap_or(&item_id)
+        episodes.first().cloned().unwrap_or_else(|| item.clone())
     };
-    let media_sources =
-        api::get_media_versions(&client, &server, selected_media_item_id).unwrap_or_default();
+    let media_sources = load_aggregated_media_versions(&app, &server, &selected_media_item);
 
     Ok(ItemDetailPayload {
         item,
@@ -535,7 +667,7 @@ pub(crate) async fn load_item_more(
 }
 
 fn load_item_more_sync(app: AppHandle, input: ItemInput) -> Result<ItemMorePayload, String> {
-    let server = store::active_server(&app)?;
+    let server = server_for_input(&app, input.server_id.as_deref())?;
     let client = api::http_client(server.use_system_proxy)?;
     let raw = api::get_item_raw(&client, &server, &input.item_id)?;
     let item = api::map_item(&server, raw.clone());
@@ -562,9 +694,13 @@ pub(crate) async fn load_media_sources(
     input: ItemInput,
 ) -> Result<Vec<crate::models::MediaVersion>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let server = store::active_server(&app)?;
+        let server = server_for_input(&app, input.server_id.as_deref())?;
         let client = api::http_client(server.use_system_proxy)?;
-        api::get_media_versions(&client, &server, &input.item_id)
+        let item = api::map_item(
+            &server,
+            api::get_item_raw(&client, &server, &input.item_id)?,
+        );
+        Ok(load_aggregated_media_versions(&app, &server, &item))
     })
     .await
     .map_err(|err| err.to_string())?
@@ -586,11 +722,43 @@ fn search_items_sync(app: AppHandle, input: SearchInput) -> Result<SearchPayload
         return Ok(SearchPayload { items: Vec::new() });
     }
 
-    let server = store::active_server(&app)?;
-    let client = api::http_client(server.use_system_proxy)?;
-    Ok(SearchPayload {
-        items: api::search_items(&client, &server, query)?,
-    })
+    let servers = store::servers(&app)?;
+    if servers.is_empty() {
+        return Ok(SearchPayload { items: Vec::new() });
+    }
+    let (items, errors) = thread::scope(|scope| {
+        servers
+            .iter()
+            .map(|server| {
+                scope.spawn(|| {
+                    let client = api::http_client_with_timeout(
+                        server.use_system_proxy,
+                        Duration::from_secs(8),
+                    )?;
+                    api::search_items(&client, server, query)
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .fold(
+                (Vec::new(), Vec::new()),
+                |(mut items, mut errors), handle| {
+                    match handle.join() {
+                        Ok(Ok(mut server_items)) => items.append(&mut server_items),
+                        Ok(Err(err)) => errors.push(err),
+                        Err(_) => errors.push("Search worker failed.".to_string()),
+                    }
+                    (items, errors)
+                },
+            )
+    });
+    if items.is_empty() && !errors.is_empty() {
+        return Err(format!(
+            "Search failed on all servers: {}",
+            errors.join(" | ")
+        ));
+    }
+    Ok(SearchPayload { items })
 }
 
 #[tauri::command]
@@ -601,7 +769,7 @@ pub(crate) async fn play_item(app: AppHandle, input: ItemInput) -> Result<PlayRe
 }
 
 fn play_item_sync(app: AppHandle, input: ItemInput) -> Result<PlayResult, String> {
-    let server = store::active_server(&app)?;
+    let server = server_for_input(&app, input.server_id.as_deref())?;
     let client = api::http_client(server.use_system_proxy)?;
     let item = api::resolve_playable_item(&client, &server, &input.item_id)?;
     let _ = store::remember_recent_play(&app, &server.id, &item.id);
@@ -682,7 +850,7 @@ pub(crate) async fn save_playback_preference(
     input: SavePlaybackPreferenceInput,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let server = store::active_server(&app)?;
+        let server = server_for_input(&app, input.server_id.as_deref())?;
         let key = store::playback_preference_key(input.series_id.as_deref(), &input.item_id);
         store::save_playback_preference(
             &app,
@@ -732,7 +900,7 @@ fn mark_item(
     input: MarkInput,
     mark: fn(&reqwest::blocking::Client, &SavedServer, &str, bool) -> Result<(), String>,
 ) -> Result<(), String> {
-    let server = store::active_server(&app)?;
+    let server = server_for_input(&app, input.server_id.as_deref())?;
     let client = api::http_client(server.use_system_proxy)?;
     mark(&client, &server, &input.item_id, input.value)
 }

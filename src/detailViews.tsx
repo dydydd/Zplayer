@@ -27,8 +27,8 @@ export function DetailView({
   payload: ItemDetailPayload;
   entryItemId: string;
   onBack: () => void;
-  onOpenItem: (id: string) => void;
-  onPlay: (id: string, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) => Promise<void>;
+  onOpenItem: (id: string, serverId?: string | null) => void;
+  onPlay: (id: string, serverId?: string | null, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, sources?: MediaVersion[], episodeIds?: string[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
   onOpenGenre: (genre: string) => void;
@@ -103,7 +103,8 @@ export function DetailView({
     function cacheMediaSources(itemId: string) {
       if (mediaSourcesByItemRef.current.has(itemId) || loadingMediaSourceIds.current.has(itemId)) return;
       loadingMediaSourceIds.current.add(itemId);
-      ipc.loadMediaSources(itemId).then((sources) => {
+      const serverId = episodes.find((episode) => episode.id === itemId)?.serverId ?? item.serverId;
+      ipc.loadMediaSources(itemId, serverId).then((sources) => {
         if (cancelled) return;
         setMediaSourcesByItem((current) => current.has(itemId) ? current : new Map(current).set(itemId, sources));
       }).catch(() => {
@@ -118,7 +119,7 @@ export function DetailView({
     return () => {
       cancelled = true;
     };
-  }, [episodes, selectedPlayableId]);
+  }, [episodes, item.serverId, selectedPlayableId]);
 
   useEffect(() => () => {
     window.clearTimeout(closeSeasonTimer.current);
@@ -145,7 +146,7 @@ export function DetailView({
 
   async function mark(command: "mark_favorite" | "mark_played", value: boolean) {
     try {
-      await (command === "mark_favorite" ? ipc.markFavorite(item.id, value) : ipc.markPlayed(item.id, value));
+      await (command === "mark_favorite" ? ipc.markFavorite(item.id, value, item.serverId) : ipc.markPlayed(item.id, value, item.serverId));
       await onRefresh();
     } catch (err) {
       onError(String(err));
@@ -187,7 +188,7 @@ export function DetailView({
             </div>
           ) : null}
           <div className="hero-actions">
-            <button className="play" onClick={() => void onPlay(selectedPlayableId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
+            <button className="play" onClick={() => void onPlay(selectedSource?.itemId ?? selectedPlayableId, selectedSource?.serverId ?? selectedEpisode?.serverId ?? item.serverId, selectedSource?.id, audioStreamIndex, subtitleStreamIndex, currentMediaSources, episodes.map((episode) => episode.id))}>
               <UiIcon name="play" />
               <span>{t("detail.play")}</span>
             </button>
@@ -206,7 +207,7 @@ export function DetailView({
           </div>
           {selectedSource && (
             <div className="hero-option-row">
-              <button onClick={() => setDetailPicker("source")}><span>{t("detail.version")}</span><strong>{selectedSource.name || t("detail.sourceN", { index: sourceIndex + 1 })}</strong></button>
+              <button onClick={() => setDetailPicker("source")}><span>{t("detail.version")}</span><strong>{versionName(selectedSource, sourceIndex)}</strong></button>
               <button onClick={() => setDetailPicker("quality")}><span>{t("detail.quality")}</span><strong>{qualityLabel(selectedSource)}</strong></button>
               <button onClick={() => setDetailPicker("audio")}><span>{t("detail.audio")}</span><strong>{streamLabel(selectedAudio) ?? t("common.default")}</strong></button>
               <button onClick={() => setDetailPicker("subtitle")}><span>{t("detail.subtitle")}</span><strong>{subtitleStreamIndex === -1 ? t("detail.noSubtitle") : streamLabel(selectedSubtitle) ?? t("detail.noSubtitle")}</strong></button>
@@ -295,14 +296,14 @@ export function DetailView({
             <h2>{pickerTitle(detailPicker)}</h2>
             <div className="source-list">
               {detailPicker === "source" && currentMediaSources.map((source, index) => (
-                <button key={source.id} className={index === sourceIndex ? "active" : ""} onClick={() => {
+                <button key={`${source.serverId ?? ""}:${source.itemId ?? ""}:${source.id}`} className={index === sourceIndex ? "active" : ""} onClick={() => {
                   setSourceIndex(index);
                   setAudioStreamIndex(undefined);
                   setSubtitleStreamIndex(undefined);
                   setDetailPicker(null);
                 }}>
-                  <strong>{source.name || t("detail.sourceN", { index: index + 1 })}</strong>
-                  <span>{mediaVersionFacts(source).join(" / ") || t("detail.noSourceInfo")}</span>
+                  <strong>{versionName(source, index)}</strong>
+                  <span>{versionFacts(source, t("detail.noSourceInfo"))}</span>
                   {source.path && <small>{source.path}</small>}
                 </button>
               ))}
@@ -373,7 +374,7 @@ export function DetailView({
       {payload.similar.length > 0 && (
         <section className="detail-block">
           <h2>{t("detail.similar")}</h2>
-          <div className="poster-grid detail-posters">{payload.similar.slice(0, 3).map((similar) => <Poster key={similar.id} item={similar} onOpen={onOpenItem} />)}</div>
+      <div className="poster-grid detail-posters">{payload.similar.slice(0, 3).map((similar) => <Poster key={`${similar.serverId ?? ""}:${similar.id}`} item={similar} onOpen={onOpenItem} />)}</div>
         </section>
       )}
     </div>
@@ -392,6 +393,15 @@ function pickerTitle(picker: DetailPicker) {
 
 function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
   return [source.resolution, source.videoRange, source.bitDepth ? `${source.bitDepth}bit` : ""].filter(Boolean).join(" ") || source.videoDisplayTitle || i18n.t("detail.originalQuality");
+}
+
+function versionName(source: MediaVersion, index: number) {
+  const name = source.name || i18n.t("detail.sourceN", { index: index + 1 });
+  return source.serverName ? `${source.serverName} · ${name}` : name;
+}
+
+function versionFacts(source: MediaVersion, fallback: string) {
+  return [source.serverName, ...mediaVersionFacts(source)].filter(Boolean).join(" / ") || fallback;
 }
 
 function formatLoadSpeed(bytesPerSecond?: number | null) {
@@ -454,6 +464,7 @@ export function PlayerView({
   seekForwardSeconds,
   sources,
   currentSourceId,
+  currentServerId,
   initialSubtitleIndex,
   onSwitchSource,
   onPreferenceChange,
@@ -476,8 +487,9 @@ export function PlayerView({
   seekForwardSeconds: number;
   sources: MediaVersion[];
   currentSourceId: string | null;
+  currentServerId?: string | null;
   initialSubtitleIndex?: number;
-  onSwitchSource: (sourceId?: string) => Promise<void>;
+  onSwitchSource: (sourceId?: string, sourceServerId?: string | null) => Promise<void>;
   onPreferenceChange: (audioIndex?: number, subtitleIndex?: number) => void;
 }) {
   const { t } = useTranslation();
@@ -486,7 +498,7 @@ export function PlayerView({
   const percent = duration > 0 ? Math.min(Math.max((time / duration) * 100, 0), 100) : 0;
   const volume = Math.round(state?.volume ?? 100);
   const speed = state?.speed ?? 1;
-  const currentSource = sources.find((source) => source.id === currentSourceId) ?? sources[0];
+  const currentSource = sources.find((source) => source.id === currentSourceId && (!currentServerId || !source.serverId || source.serverId === currentServerId)) ?? sources[0];
   const [visible, setVisible] = useState(true);
   const [menu, setMenu] = useState<"source" | "audio" | "subtitle" | "settings" | null>(null);
   const [audioIndex, setAudioIndex] = useState<number>();
@@ -699,13 +711,13 @@ export function PlayerView({
         {menu && menu !== "settings" && (
           <div className="player-select-menu" onMouseEnter={() => window.clearTimeout(hideTimer.current)}>
             {menu === "source" && !sources.length && <button><strong>{t("player.noSources")}</strong><span>{t("player.noSourcesNote")}</span></button>}
-            {menu === "source" && sources.map((source) => (
-              <button key={source.id} className={source.id === currentSourceId ? "active" : ""} onClick={() => {
+            {menu === "source" && sources.map((source, index) => (
+              <button key={`${source.serverId ?? ""}:${source.itemId ?? ""}:${source.id}`} className={source.id === currentSourceId && (!currentServerId || !source.serverId || source.serverId === currentServerId) ? "active" : ""} onClick={() => {
                 setMenu(null);
-                void onSwitchSource(source.id);
+                void onSwitchSource(source.id, source.serverId);
               }}>
-                <strong>{source.name || qualityLabel(source)}</strong>
-                <span>{mediaVersionFacts(source).join(" / ") || t("player.defaultSource")}</span>
+                <strong>{versionName(source, index)}</strong>
+                <span>{versionFacts(source, t("player.defaultSource"))}</span>
               </button>
             ))}
             {menu === "audio" && !(currentSource?.audioStreams.length) && <button><strong>{t("player.noAudio")}</strong><span>{t("player.noAudioNote")}</span></button>}

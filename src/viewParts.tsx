@@ -200,21 +200,22 @@ export const Poster = memo(function Poster({
   onTogglePlayed,
 }: {
   item: MediaItem;
-  onOpen: (id: string) => void;
+  onOpen: (id: string, serverId?: string | null) => void;
   hideMeta?: boolean;
   onToggleFavorite?: (item: MediaItem) => void;
   onTogglePlayed?: (item: MediaItem) => void;
 }) {
   const { t } = useTranslation();
+  const meta = [itemMeta(item), item.serverName].filter(Boolean).join(" / ");
   return (
     <article className="poster">
-      <button className="poster-main" onClick={() => onOpen(item.id)}>
+      <button className="poster-main" onClick={() => onOpen(item.id, item.serverId)}>
         <span className="poster-cover">
           <Image src={item.primaryImageUrl} alt={item.name} />
           {item.communityRating && <span className="score">{item.communityRating.toFixed(1)}</span>}
         </span>
         <strong>{item.name}</strong>
-        {!hideMeta && <small>{itemMeta(item)}</small>}
+        {!hideMeta && <small>{meta}</small>}
       </button>
       {(onToggleFavorite || onTogglePlayed) && (
         <div className="poster-actions">

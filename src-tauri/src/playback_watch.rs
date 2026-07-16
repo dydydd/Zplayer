@@ -16,6 +16,7 @@ const SERVER_PROGRESS_REPORT_INTERVAL: Duration = Duration::from_secs(10);
 #[serde(rename_all = "camelCase")]
 struct PlaybackStoppedEvent {
     item_id: String,
+    server_id: String,
     play_session_id: String,
     failed: bool,
     completed: bool,
@@ -129,6 +130,7 @@ pub(crate) fn watch_mpv_playback(input: WatchMpvPlaybackInput) {
                     "playback-stopped",
                     PlaybackStoppedEvent {
                         item_id,
+                        server_id: server.id.clone(),
                         play_session_id,
                         failed,
                         completed,

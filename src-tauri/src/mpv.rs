@@ -905,6 +905,8 @@ pub(crate) fn launch(
     Ok(Launch {
         result: PlayResult {
             item_id: item_id.to_string(),
+            server_id: server.id.clone(),
+            server_name: server.name.clone(),
             media_source_id,
             play_session_id,
             url: redacted_url,

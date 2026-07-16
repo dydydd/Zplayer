@@ -13,6 +13,8 @@ pub(crate) struct MediaLibrary {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MediaItem {
     pub(crate) id: String,
+    pub(crate) server_id: String,
+    pub(crate) server_name: String,
     pub(crate) name: String,
     pub(crate) item_type: String,
     pub(crate) year: Option<i64>,
@@ -43,6 +45,9 @@ pub(crate) struct MediaItem {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MediaVersion {
     pub(crate) id: String,
+    pub(crate) item_id: String,
+    pub(crate) server_id: String,
+    pub(crate) server_name: String,
     pub(crate) name: String,
     pub(crate) container: Option<String>,
     pub(crate) path: Option<String>,
