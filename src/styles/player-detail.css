@@ -573,6 +573,13 @@
   font-weight: 1000;
 }
 
+.app.platform-wayland .hero-actions .play,
+.app.platform-wayland .hero-actions .play:hover,
+.app.platform-wayland .hero-actions .play:focus-visible {
+  background: rgba(255, 255, 255, 0.94);
+  color: #070708;
+}
+
 .hero-actions .mark-round,
 .hero-actions .mark-text {
   display: grid;
