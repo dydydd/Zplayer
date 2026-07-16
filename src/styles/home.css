@@ -326,6 +326,22 @@
   contain-intrinsic-size: auto 300px;
 }
 
+.app.platform-wayland .feature-banner,
+.app.platform-wayland .feature-art,
+.app.platform-wayland .feature-copy {
+  transform: none;
+  will-change: auto;
+}
+
+.app.platform-wayland .feature-logo {
+  filter: none;
+}
+
+.app.platform-wayland .home-shelves .home-shelf {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
 .home-shelf .media-row {
   margin-bottom: 0;
   padding-top: 30px;

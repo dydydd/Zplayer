@@ -53,7 +53,15 @@ pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
     {
         std::env::set_var("GDK_BACKEND", "wayland");
         std::env::set_var("WINIT_UNIX_BACKEND", "wayland");
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        if is_truthy_env(
+            std::env::var("ZPLAYER_ENABLE_WEBKIT_DMABUF")
+                .ok()
+                .as_deref(),
+        ) {
+            std::env::remove_var("WEBKIT_DISABLE_DMABUF_RENDERER");
+        } else {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
         std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE");
         let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
         if !is_wayland_display_set(wayland_display.as_deref()) {

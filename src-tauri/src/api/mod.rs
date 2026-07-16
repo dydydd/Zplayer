@@ -9,7 +9,9 @@ pub(crate) use self::actions::{
 };
 use self::http::{auth_header, build_url, get_json, read_json};
 pub(crate) use self::http::{http_client, http_client_with_timeout};
-use self::images::{media_image_url_indexed, media_playback_url, primary_image_url};
+use self::images::{
+    media_image_url_indexed, media_playback_url, primary_image_url, BACKDROP_IMAGE_WIDTH,
+};
 use self::mapping::{first_playable_child, is_playable_item_type, map_search_hint, stream_info};
 pub(crate) use self::mapping::{map_item, people};
 use crate::models::{
@@ -408,7 +410,7 @@ pub(crate) fn art_urls(server: &SavedServer, item: &ApiItem) -> Vec<MediaArt> {
             &item.id,
             "Backdrop",
             index,
-            &[("fillWidth", "1600")],
+            &[("fillWidth", BACKDROP_IMAGE_WIDTH)],
         ) {
             art.push(MediaArt {
                 image_type: "Backdrop".to_string(),
@@ -1418,6 +1420,6 @@ mod tests {
 
         let url = primary_image_url(&server, &item).unwrap();
 
-        assert!(url.contains("fillWidth=360"));
+        assert!(url.contains("fillWidth=320"));
     }
 }

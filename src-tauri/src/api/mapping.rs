@@ -1,4 +1,7 @@
-use super::images::{backdrop_url, logo_url, media_image_url, primary_image_url};
+use super::images::{
+    backdrop_url, logo_url, media_image_url, primary_image_url, BACKDROP_IMAGE_WIDTH,
+    PRIMARY_IMAGE_WIDTH,
+};
 use crate::models::{
     ApiItem, MediaItem, MediaPerson, MediaStream, SavedServer, SearchHint, StreamInfo,
 };
@@ -75,7 +78,13 @@ pub(crate) fn map_item(server: &SavedServer, item: ApiItem) -> MediaItem {
 pub(crate) fn map_search_hint(server: &SavedServer, hint: SearchHint) -> Option<MediaItem> {
     let id = hint.item_id.or(hint.id)?;
     let primary_image_url = if hint.primary_image_tag.is_some() {
-        media_image_url(server, &id, "Primary", &[("fillWidth", "360")]).ok()
+        media_image_url(
+            server,
+            &id,
+            "Primary",
+            &[("fillWidth", PRIMARY_IMAGE_WIDTH)],
+        )
+        .ok()
     } else {
         None
     };
@@ -85,12 +94,18 @@ pub(crate) fn map_search_hint(server: &SavedServer, hint: SearchHint) -> Option<
             server,
             backdrop_item_id,
             "Backdrop",
-            &[("fillWidth", "1600")],
+            &[("fillWidth", BACKDROP_IMAGE_WIDTH)],
         )
         .ok()
     } else if hint.thumb_image_tag.is_some() {
         let thumb_item_id = hint.thumb_image_item_id.as_deref().unwrap_or(&id);
-        media_image_url(server, thumb_item_id, "Thumb", &[("fillWidth", "1600")]).ok()
+        media_image_url(
+            server,
+            thumb_item_id,
+            "Thumb",
+            &[("fillWidth", BACKDROP_IMAGE_WIDTH)],
+        )
+        .ok()
     } else {
         None
     };
@@ -139,7 +154,8 @@ pub(crate) fn people(server: &SavedServer, item: &ApiItem) -> Vec<MediaPerson> {
                     person.primary_image_tag.is_some() || person.image_tags.contains_key("Primary")
                 })
                 .and_then(|id| {
-                    media_image_url(server, id, "Primary", &[("fillWidth", "360")]).ok()
+                    media_image_url(server, id, "Primary", &[("fillWidth", PRIMARY_IMAGE_WIDTH)])
+                        .ok()
                 });
             Some(MediaPerson {
                 id: person.id.clone(),
