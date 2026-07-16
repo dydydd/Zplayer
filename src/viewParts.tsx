@@ -243,6 +243,7 @@ export function Image({
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const ready = !!src && readySrc === src;
   const failed = !!src && failedSrc === src;
+  const fallbackLabel = alt.replace(/\s+/g, "").slice(0, 2) || "--";
 
   useEffect(() => {
     setReadySrc(null);
@@ -253,7 +254,7 @@ export function Image({
   }, [src]);
 
   if (!src || failed) {
-    return <div className="image-fallback">{alt.slice(0, 2)}</div>;
+    return <div className="image-fallback">{fallbackLabel}</div>;
   }
 
   return (

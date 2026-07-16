@@ -58,12 +58,16 @@ export function DetailView({
   const initialMediaSourceItemId = initialEpisodeId || payload.episodes[0]?.id || item.id;
   const [mediaSourcesByItem, setMediaSourcesByItem] = useState(() => new Map([[initialMediaSourceItemId, payload.mediaSources]]));
   const mediaSourcesByItemRef = useRef(mediaSourcesByItem);
+  const fallbackPlayableChildren = useMemo(
+    () => payload.children.filter(isPlayableDetailItem),
+    [payload.children],
+  );
   const episodes = useMemo(() => {
-    if (!payload.episodes.length) return payload.children;
+    if (!payload.episodes.length) return fallbackPlayableChildren;
     if (!seasonId) return payload.episodes;
     const season = payload.seasons.find((entry) => entry.id === seasonId);
     return payload.episodes.filter((episode) => episode.seasonId === seasonId || episode.seasonName === season?.name);
-  }, [payload.children, payload.episodes, payload.seasons, seasonId]);
+  }, [fallbackPlayableChildren, payload.episodes, payload.seasons, seasonId]);
   const selectedEpisode = episodes.find((episode) => episode.id === selectedEpisodeId) ?? episodes[0];
   const selectedPlayableId = selectedEpisode?.id ?? item.id;
   const currentMediaSources = mediaSourcesByItem.get(selectedPlayableId) ?? [];
@@ -393,6 +397,10 @@ function pickerTitle(picker: DetailPicker) {
 
 function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
   return [source.resolution, source.videoRange, source.bitDepth ? `${source.bitDepth}bit` : ""].filter(Boolean).join(" ") || source.videoDisplayTitle || i18n.t("detail.originalQuality");
+}
+
+function isPlayableDetailItem(item: { itemType: string }) {
+  return ["Movie", "Episode", "Video"].includes(item.itemType);
 }
 
 function versionName(source: MediaVersion, index: number) {
