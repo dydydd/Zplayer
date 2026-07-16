@@ -156,8 +156,15 @@ fn handle_native_video_render(area: &gtk::GLArea) -> gtk::glib::Propagation {
     use gtk::prelude::*;
 
     NATIVE_VIDEO_RENDER_COUNT.fetch_add(1, Ordering::SeqCst);
-    NATIVE_VIDEO_RENDER_WIDTH.store(area.allocated_width(), Ordering::SeqCst);
-    NATIVE_VIDEO_RENDER_HEIGHT.store(area.allocated_height(), Ordering::SeqCst);
+    let scale_factor = area.scale_factor().max(1);
+    NATIVE_VIDEO_RENDER_WIDTH.store(
+        area.allocated_width().saturating_mul(scale_factor).max(1),
+        Ordering::SeqCst,
+    );
+    NATIVE_VIDEO_RENDER_HEIGHT.store(
+        area.allocated_height().saturating_mul(scale_factor).max(1),
+        Ordering::SeqCst,
+    );
     crate::mpv::render_native_video(area)
 }
 

@@ -765,8 +765,11 @@ impl MpvRenderContext {
 
         area.make_current();
         area.attach_buffers();
-        let width = area.allocated_width().max(1);
-        let height = area.allocated_height().max(1);
+        let (width, height) = scaled_gl_area_size(
+            area.allocated_width(),
+            area.allocated_height(),
+            area.scale_factor(),
+        );
         let framebuffer = current_gl_framebuffer();
         LAST_RENDER_FRAMEBUFFER.store(framebuffer, Ordering::SeqCst);
         let mut fbo = MpvOpenGlFbo {
@@ -1221,6 +1224,15 @@ fn wayland_display_for_gl_area(area: &gtk::GLArea) -> Result<*mut c_void, String
 #[cfg(target_os = "linux")]
 unsafe extern "C" fn mpv_render_update_callback(_context: *mut c_void) {
     crate::platform_window::queue_native_video_render();
+}
+
+#[cfg(target_os = "linux")]
+fn scaled_gl_area_size(width: i32, height: i32, scale_factor: i32) -> (c_int, c_int) {
+    let scale_factor = scale_factor.max(1);
+    (
+        width.saturating_mul(scale_factor).max(1),
+        height.saturating_mul(scale_factor).max(1),
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -2038,6 +2050,13 @@ mod tests {
         assert_eq!(MPV_RENDER_API_TYPE_OPENGL, "opengl");
         #[cfg(target_os = "linux")]
         assert_eq!(GL_FRAMEBUFFER_BINDING, 0x8CA6);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gtk_gl_area_render_size_uses_physical_pixels() {
+        assert_eq!(scaled_gl_area_size(1920, 1080, 2), (3840, 2160));
+        assert_eq!(scaled_gl_area_size(0, 0, 0), (1, 1));
     }
 
     #[test]
