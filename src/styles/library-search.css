@@ -350,6 +350,9 @@
   overflow: hidden;
   margin-bottom: 14px;
   border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(58, 63, 74, 0.72), rgba(24, 26, 32, 0.98)),
+    #1d1d1f;
   transition:
     transform 0.16s var(--tv-ease),
     box-shadow 0.16s var(--tv-ease);
@@ -370,7 +373,9 @@
   aspect-ratio: 2 / 3;
   border-radius: inherit;
   object-fit: cover;
-  background: #1d1d1f;
+  background:
+    linear-gradient(135deg, rgba(58, 63, 74, 0.72), rgba(24, 26, 32, 0.98)),
+    #1d1d1f;
 }
 
 .poster strong {

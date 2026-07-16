@@ -238,5 +238,35 @@ export function Image({
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low" | "auto";
 }) {
-  return src ? <img src={src} alt={alt} loading={loading} decoding="async" fetchPriority={fetchPriority} /> : <div className="image-fallback">{alt.slice(0, 2)}</div>;
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [readySrc, setReadySrc] = useState<string | null>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const ready = !!src && readySrc === src;
+  const failed = !!src && failedSrc === src;
+
+  useEffect(() => {
+    setReadySrc(null);
+    setFailedSrc(null);
+    if (imageRef.current?.complete) {
+      setReadySrc(src ?? null);
+    }
+  }, [src]);
+
+  if (!src || failed) {
+    return <div className="image-fallback">{alt.slice(0, 2)}</div>;
+  }
+
+  return (
+    <img
+      ref={imageRef}
+      className={`async-image ${ready ? "image-ready" : ""}`}
+      src={src}
+      alt={alt}
+      loading={loading}
+      decoding="async"
+      fetchPriority={fetchPriority}
+      onLoad={() => setReadySrc(src)}
+      onError={() => setFailedSrc(src)}
+    />
+  );
 }

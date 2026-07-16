@@ -88,6 +88,15 @@ h2 {
   display: none;
 }
 
+.async-image {
+  opacity: 0;
+  transition: opacity 0.18s var(--tv-ease);
+}
+
+.async-image.image-ready {
+  opacity: 1;
+}
+
 .settings-panel {
   display: grid;
   gap: 12px;
