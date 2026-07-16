@@ -465,21 +465,28 @@ impl MpvSession {
         let session = self.clone();
         let (tx, rx) = mpsc::channel();
 
+        let render_window = window.clone();
         window
             .run_on_main_thread(move || {
-                let result = crate::platform_window::with_native_video_area(|area| {
-                    use gtk::prelude::*;
+                let result = crate::platform_window::ensure_native_video_overlay(&render_window)
+                    .map_err(|err| format!("Failed to install Linux native video layer: {err}"))
+                    .and_then(|_| {
+                        crate::platform_window::with_native_video_area(|area| {
+                            use gtk::prelude::*;
 
-                    area.make_current();
-                    area.attach_buffers();
-                    let wayland_display = wayland_display_for_gl_area(area)?;
-                    let context =
-                        session.create_render_context_on_current_thread(wayland_display)?;
-                    session.set_render_context_on_current_thread(context)?;
-                    area.queue_render();
-                    Ok(())
-                })
-                .unwrap_or_else(|| Err("Linux native video layer is not available.".to_string()));
+                            area.make_current();
+                            area.attach_buffers();
+                            let wayland_display = wayland_display_for_gl_area(area)?;
+                            let context =
+                                session.create_render_context_on_current_thread(wayland_display)?;
+                            session.set_render_context_on_current_thread(context)?;
+                            area.queue_render();
+                            Ok(())
+                        })
+                        .unwrap_or_else(|| {
+                            Err("Linux native video layer is not available.".to_string())
+                        })
+                    });
                 let _ = tx.send(result);
             })
             .map_err(|err| format!("Failed to initialize libmpv render thread: {err}"))?;

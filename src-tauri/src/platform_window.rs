@@ -97,18 +97,20 @@ pub(crate) fn create_main_window<R: Runtime>(
             .transparent(false)
             .background_color(WAYLAND_OPAQUE_BACKGROUND);
     }
-    let window = builder.build()?;
-    #[cfg(target_os = "linux")]
-    install_native_video_overlay(&window)?;
+    builder.build()?;
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
-fn install_native_video_overlay<R: Runtime>(
+pub(crate) fn ensure_native_video_overlay<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use gtk::prelude::*;
     use webkit2gtk::{SettingsExt, WebViewExt};
+
+    if NATIVE_VIDEO_OVERLAY_INSTALLED.load(Ordering::SeqCst) {
+        return Ok(());
+    }
 
     let webview_window = window.clone();
     let container_window = window.clone();
