@@ -62,8 +62,10 @@ export type LinuxWindowDiagnostics = {
   xdgSessionType?: string | null;
   waylandDisplaySet: boolean;
   gdkBackend?: string | null;
+  winitUnixBackend?: string | null;
   waylandRequired: boolean;
   gdkBackendWayland: boolean;
+  winitBackendWayland: boolean;
   nativeVideoOverlay: boolean;
   nativeVideoRenderCount: number;
   nativeVideoRenderWidth: number;

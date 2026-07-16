@@ -10,7 +10,8 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    platform_window::prepare_linux_wayland_environment();
+    platform_window::prepare_linux_wayland_environment()
+        .expect("Zplayer Linux desktop requires a Wayland session.");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

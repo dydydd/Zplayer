@@ -32,8 +32,10 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) xdg_session_type: Option<String>,
     pub(crate) wayland_display_set: bool,
     pub(crate) gdk_backend: Option<String>,
+    pub(crate) winit_unix_backend: Option<String>,
     pub(crate) wayland_required: bool,
     pub(crate) gdk_backend_wayland: bool,
+    pub(crate) winit_backend_wayland: bool,
     pub(crate) native_video_overlay: bool,
     pub(crate) native_video_render_count: u64,
     pub(crate) native_video_render_width: i32,
@@ -42,9 +44,20 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) opaque_window: bool,
 }
 
-pub(crate) fn prepare_linux_wayland_environment() {
+pub(crate) fn prepare_linux_wayland_environment() -> Result<(), String> {
     #[cfg(target_os = "linux")]
-    std::env::set_var("GDK_BACKEND", "wayland");
+    {
+        std::env::set_var("GDK_BACKEND", "wayland");
+        std::env::set_var("WINIT_UNIX_BACKEND", "wayland");
+        let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
+        if !is_wayland_display_set(wayland_display.as_deref()) {
+            return Err(
+                "Zplayer Linux desktop only supports Wayland. WAYLAND_DISPLAY is not set."
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn create_main_window<R: Runtime>(
@@ -170,6 +183,7 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
     let xdg_session_type = std::env::var("XDG_SESSION_TYPE").ok();
     let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
     let gdk_backend = std::env::var("GDK_BACKEND").ok();
+    let winit_unix_backend = std::env::var("WINIT_UNIX_BACKEND").ok();
     #[cfg(target_os = "linux")]
     let native_video_render_context = crate::mpv::native_video_render_context_active();
     #[cfg(not(target_os = "linux"))]
@@ -177,19 +191,23 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
 
     LinuxWindowDiagnostics {
         xdg_session_type,
-        wayland_display_set: wayland_display
-            .as_deref()
-            .is_some_and(|value| !value.is_empty()),
+        wayland_display_set: is_wayland_display_set(wayland_display.as_deref()),
         wayland_required: current_platform() == DesktopPlatform::Linux,
         gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
+        winit_backend_wayland: is_winit_wayland_backend(winit_unix_backend.as_deref()),
         native_video_overlay: NATIVE_VIDEO_OVERLAY_INSTALLED.load(Ordering::SeqCst),
         native_video_render_count: NATIVE_VIDEO_RENDER_COUNT.load(Ordering::SeqCst),
         native_video_render_width: NATIVE_VIDEO_RENDER_WIDTH.load(Ordering::SeqCst),
         native_video_render_height: NATIVE_VIDEO_RENDER_HEIGHT.load(Ordering::SeqCst),
         native_video_render_context,
         gdk_backend,
+        winit_unix_backend,
         opaque_window: false,
     }
+}
+
+pub(crate) fn is_wayland_display_set(wayland_display: Option<&str>) -> bool {
+    wayland_display.is_some_and(|value| !value.trim().is_empty())
 }
 
 pub(crate) fn is_wayland_backend(gdk_backend: Option<&str>) -> bool {
@@ -199,6 +217,10 @@ pub(crate) fn is_wayland_backend(gdk_backend: Option<&str>) -> bool {
             .map(str::trim)
             .any(|backend| backend.eq_ignore_ascii_case("wayland"))
     })
+}
+
+pub(crate) fn is_winit_wayland_backend(winit_unix_backend: Option<&str>) -> bool {
+    winit_unix_backend.is_some_and(|value| value.eq_ignore_ascii_case("wayland"))
 }
 
 fn current_platform() -> DesktopPlatform {
@@ -223,6 +245,22 @@ mod tests {
         assert!(!is_wayland_backend(Some("x11")));
         assert!(!is_wayland_backend(Some("waylandish")));
         assert!(!is_wayland_backend(None));
+    }
+
+    #[test]
+    fn validates_wayland_display_presence() {
+        assert!(is_wayland_display_set(Some("wayland-0")));
+        assert!(!is_wayland_display_set(Some("")));
+        assert!(!is_wayland_display_set(Some("   ")));
+        assert!(!is_wayland_display_set(None));
+    }
+
+    #[test]
+    fn detects_winit_wayland_backend() {
+        assert!(is_winit_wayland_backend(Some("wayland")));
+        assert!(is_winit_wayland_backend(Some("WAYLAND")));
+        assert!(!is_winit_wayland_backend(Some("x11")));
+        assert!(!is_winit_wayland_backend(None));
     }
 
     #[test]
