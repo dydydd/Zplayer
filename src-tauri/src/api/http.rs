@@ -49,6 +49,11 @@ pub(crate) fn read_json<T: DeserializeOwned>(
     context: &str,
 ) -> Result<T, String> {
     let status = response.status();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     if !status.is_success() {
         let body = response.text().unwrap_or_default();
         let detail = body.trim();
@@ -58,9 +63,42 @@ pub(crate) fn read_json<T: DeserializeOwned>(
             format!("{context} returned HTTP {status}: {detail}")
         });
     }
-    response
-        .json()
-        .map_err(|err| format!("Failed to read {context} response: {err}"))
+    let body = response
+        .text()
+        .map_err(|err| format!("Failed to read {context} response body: {err}"))?;
+    serde_json::from_str(&body).map_err(|err| {
+        let content_type = content_type.unwrap_or_else(|| "unknown content-type".to_string());
+        let preview = response_preview(&body);
+        if preview.is_empty() {
+            format!("Failed to decode {context} response as JSON ({content_type}): {err}; empty response body")
+        } else {
+            format!("Failed to decode {context} response as JSON ({content_type}): {err}; body starts with: {preview}")
+        }
+    })
+}
+
+fn response_preview(body: &str) -> String {
+    body.chars()
+        .take(240)
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_preview_collapses_whitespace_and_limits_body() {
+        let body = format!("  <html>\n  {}\n  </html>", "x".repeat(300));
+        let preview = response_preview(&body);
+
+        assert!(!preview.contains('\n'));
+        assert!(preview.starts_with("<html>"));
+        assert!(preview.len() <= 240);
+    }
 }
 
 pub(crate) fn build_url(

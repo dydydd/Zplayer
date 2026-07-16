@@ -21,6 +21,7 @@ use crate::models::{
 };
 use reqwest::blocking::Client;
 use reqwest::Url;
+use std::{thread, time::Duration};
 
 pub(crate) fn authenticate_by_name(
     client: &Client,
@@ -79,8 +80,16 @@ pub(crate) fn fetch_libraries(
         ("userId", server.user_id.clone()),
         ("includeExternalContent", "false".to_string()),
     ];
-    let response = get_json::<ItemsResponse>(client, server, "Users/{user_id}/Views", &emby_params)
-        .or_else(|_| get_json::<ItemsResponse>(client, server, "UserViews", &jellyfin_params))?;
+    let response = get_json_with_retry::<ItemsResponse>(
+        client,
+        server,
+        "Users/{user_id}/Views",
+        &emby_params,
+        1,
+    )
+    .or_else(|_| {
+        get_json_with_retry::<ItemsResponse>(client, server, "UserViews", &jellyfin_params, 1)
+    })?;
     Ok(response
         .into_items()
         .into_iter()
@@ -94,6 +103,28 @@ pub(crate) fn fetch_libraries(
             }
         })
         .collect())
+}
+
+fn get_json_with_retry<T: serde::de::DeserializeOwned>(
+    client: &Client,
+    server: &SavedServer,
+    path: &str,
+    params: &[(&str, String)],
+    retries: usize,
+) -> Result<T, String> {
+    let mut last_error = String::new();
+    for attempt in 0..=retries {
+        match get_json(client, server, path, params) {
+            Ok(response) => return Ok(response),
+            Err(err) => {
+                last_error = err;
+                if attempt < retries {
+                    thread::sleep(Duration::from_millis(160));
+                }
+            }
+        }
+    }
+    Err(last_error)
 }
 
 pub(crate) fn item_counts(client: &Client, server: &SavedServer) -> Result<ItemCounts, String> {
