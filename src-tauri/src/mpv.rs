@@ -8,8 +8,9 @@ use std::os::raw::{c_char, c_double, c_int, c_void};
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 type MpvCreate = unsafe extern "C" fn() -> *mut c_void;
@@ -29,6 +30,10 @@ type MpvRenderContextRender = unsafe extern "C" fn(*mut c_void, *mut MpvRenderPa
 type MpvRenderContextReportSwap = unsafe extern "C" fn(*mut c_void);
 type MpvRenderContextFree = unsafe extern "C" fn(*mut c_void);
 type MpvRenderUpdateFn = unsafe extern "C" fn(*mut c_void);
+#[cfg(target_os = "linux")]
+type MpvGlGetProcAddress = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_void;
+#[cfg(target_os = "linux")]
+type EpoxyGetProcAddress = unsafe extern "C" fn(*const c_char) -> *mut c_void;
 
 #[repr(C)]
 struct MpvEvent {
@@ -53,6 +58,22 @@ struct MpvRenderParam {
     data: *mut c_void,
 }
 
+#[cfg(target_os = "linux")]
+#[repr(C)]
+struct MpvOpenGlInitParams {
+    get_proc_address: Option<MpvGlGetProcAddress>,
+    get_proc_address_ctx: *mut c_void,
+}
+
+#[cfg(target_os = "linux")]
+#[repr(C)]
+struct MpvOpenGlFbo {
+    fbo: c_int,
+    width: c_int,
+    height: c_int,
+    internal_format: c_int,
+}
+
 static SESSIONS: OnceLock<Mutex<HashMap<String, Arc<MpvSession>>>> = OnceLock::new();
 static PROGRESS_STATES: OnceLock<Mutex<HashMap<String, PlaybackStateResult>>> = OnceLock::new();
 static EXPLICIT_STOPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -60,6 +81,10 @@ type ApiLoadResult = Result<Arc<MpvApi>, String>;
 type ApiCache = Mutex<HashMap<PathBuf, ApiLoadResult>>;
 
 static API_CACHE: OnceLock<ApiCache> = OnceLock::new();
+#[cfg(target_os = "linux")]
+static ACTIVE_RENDER_CONTEXT: OnceLock<Mutex<Option<Arc<MpvRenderContext>>>> = OnceLock::new();
+#[cfg(target_os = "linux")]
+static EPOXY_LIBRARY: OnceLock<Option<libloading::os::unix::Library>> = OnceLock::new();
 
 const MPV_FORMAT_FLAG: c_int = 3;
 const MPV_FORMAT_INT64: c_int = 4;
@@ -75,6 +100,8 @@ const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
 const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
 const MPV_RENDER_UPDATE_FRAME: u64 = 1;
 const MPV_RENDER_API_TYPE_OPENGL: &str = "opengl";
+#[cfg(target_os = "linux")]
+const GL_RGBA8: c_int = 0x8058;
 
 const DISABLE_MPV_UI_OPTIONS: &[(&str, &str)] = &[
     ("input-default-bindings", "no"),
@@ -245,12 +272,26 @@ struct MpvSession {
     handle: *mut c_void,
     destroyed: AtomicBool,
     calls: Mutex<()>,
+    #[cfg(target_os = "linux")]
+    render_context: Mutex<Option<Arc<MpvRenderContext>>>,
     seek_back_seconds: i32,
     seek_forward_seconds: i32,
 }
 
 unsafe impl Send for MpvSession {}
 unsafe impl Sync for MpvSession {}
+
+#[cfg(target_os = "linux")]
+struct MpvRenderContext {
+    api: Arc<MpvApi>,
+    context: usize,
+    freed: AtomicBool,
+}
+
+#[cfg(target_os = "linux")]
+unsafe impl Send for MpvRenderContext {}
+#[cfg(target_os = "linux")]
+unsafe impl Sync for MpvRenderContext {}
 
 impl MpvSession {
     fn create(
@@ -268,6 +309,8 @@ impl MpvSession {
             handle,
             destroyed: AtomicBool::new(false),
             calls: Mutex::new(()),
+            #[cfg(target_os = "linux")]
+            render_context: Mutex::new(None),
             seek_back_seconds,
             seek_forward_seconds,
         })
@@ -298,6 +341,110 @@ impl MpvSession {
         self.ensure_live()?;
         let status = unsafe { (self.api.mpv_initialize)(self.handle) };
         self.status(status, "Failed to initialize libmpv")
+    }
+
+    #[cfg(target_os = "linux")]
+    fn initialize_render_context(self: &Arc<Self>, app: &AppHandle) -> Result<(), String> {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Failed to find the app window for embedded libmpv.".to_string())?;
+        let session = self.clone();
+        let (tx, rx) = mpsc::channel();
+
+        window
+            .run_on_main_thread(move || {
+                let result = crate::platform_window::with_native_video_area(|area| {
+                    use gtk::prelude::*;
+
+                    area.make_current();
+                    let context = session.create_render_context_on_current_thread()?;
+                    session.set_render_context_on_current_thread(context)?;
+                    area.queue_render();
+                    Ok(())
+                })
+                .unwrap_or_else(|| Err("Linux native video layer is not available.".to_string()));
+                let _ = tx.send(result);
+            })
+            .map_err(|err| format!("Failed to initialize libmpv render thread: {err}"))?;
+
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|err| match err {
+                mpsc::RecvTimeoutError::Timeout => {
+                    "Timed out while initializing libmpv OpenGL render context.".to_string()
+                }
+                mpsc::RecvTimeoutError::Disconnected => {
+                    "Failed to receive libmpv render initialization result.".to_string()
+                }
+            })?
+    }
+
+    #[cfg(target_os = "linux")]
+    fn create_render_context_on_current_thread(&self) -> Result<Arc<MpvRenderContext>, String> {
+        let _guard = self
+            .calls
+            .lock()
+            .map_err(|_| "Failed to lock libmpv session.".to_string())?;
+        self.ensure_live()?;
+
+        let api_type = c_string(MPV_RENDER_API_TYPE_OPENGL, "Invalid libmpv render API type")?;
+        let mut init_params = MpvOpenGlInitParams {
+            get_proc_address: Some(mpv_gl_get_proc_address),
+            get_proc_address_ctx: ptr::null_mut(),
+        };
+        let mut context = ptr::null_mut();
+        let mut params = [
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_API_TYPE,
+                data: api_type.as_ptr() as *mut c_void,
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
+                data: &mut init_params as *mut MpvOpenGlInitParams as *mut c_void,
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_INVALID,
+                data: ptr::null_mut(),
+            },
+        ];
+
+        let status = unsafe {
+            (self.api.mpv_render_context_create)(&mut context, self.handle, params.as_mut_ptr())
+        };
+        self.status(status, "Failed to initialize libmpv OpenGL render context")?;
+        if context.is_null() {
+            return Err("libmpv returned an empty render context.".to_string());
+        }
+
+        let context = Arc::new(MpvRenderContext {
+            api: self.api.clone(),
+            context: context as usize,
+            freed: AtomicBool::new(false),
+        });
+        unsafe {
+            (context.api.mpv_render_context_set_update_callback)(
+                context.as_ptr(),
+                Some(mpv_render_update_callback),
+                ptr::null_mut(),
+            );
+        }
+        Ok(context)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn set_render_context_on_current_thread(
+        &self,
+        context: Arc<MpvRenderContext>,
+    ) -> Result<(), String> {
+        let mut stored = self
+            .render_context
+            .lock()
+            .map_err(|_| "Failed to lock libmpv render context.".to_string())?;
+        if let Some(old) = stored.replace(context.clone()) {
+            clear_active_render_context(old.as_ptr());
+            old.free_on_current_thread();
+        }
+        set_active_render_context(context);
+        Ok(())
     }
 
     fn command(&self, args: &[&str]) -> Result<(), String> {
@@ -390,9 +537,24 @@ impl MpvSession {
             return;
         };
         if !self.destroyed.swap(true, Ordering::SeqCst) {
+            #[cfg(target_os = "linux")]
+            self.free_render_context_locked();
             unsafe {
                 (self.api.mpv_terminate_destroy)(self.handle);
             }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn free_render_context_locked(&self) {
+        let context = self
+            .render_context
+            .lock()
+            .ok()
+            .and_then(|mut context| context.take());
+        if let Some(context) = context {
+            clear_active_render_context(context.as_ptr());
+            context.free_on_main_thread();
         }
     }
 
@@ -461,6 +623,93 @@ impl Drop for MpvSession {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl MpvRenderContext {
+    fn as_ptr(&self) -> *mut c_void {
+        self.context as *mut c_void
+    }
+
+    fn render_gl_area(&self, area: &gtk::GLArea) {
+        if self.freed.load(Ordering::SeqCst) {
+            return;
+        }
+
+        use gtk::prelude::*;
+
+        area.make_current();
+        let width = area.allocated_width().max(1);
+        let height = area.allocated_height().max(1);
+        let mut fbo = MpvOpenGlFbo {
+            fbo: 0,
+            width,
+            height,
+            internal_format: GL_RGBA8,
+        };
+        let mut flip_y: c_int = 1;
+        let mut params = [
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_OPENGL_FBO,
+                data: &mut fbo as *mut MpvOpenGlFbo as *mut c_void,
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_FLIP_Y,
+                data: &mut flip_y as *mut c_int as *mut c_void,
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_INVALID,
+                data: ptr::null_mut(),
+            },
+        ];
+
+        unsafe {
+            let _ = (self.api.mpv_render_context_update)(self.as_ptr());
+            let status = (self.api.mpv_render_context_render)(self.as_ptr(), params.as_mut_ptr());
+            if status >= 0 {
+                (self.api.mpv_render_context_report_swap)(self.as_ptr());
+            }
+        }
+    }
+
+    fn free_on_main_thread(self: Arc<Self>) {
+        if self.freed.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let main_context = gtk::glib::MainContext::default();
+        if main_context.is_owner() {
+            self.free_with_native_video_area();
+            return;
+        }
+
+        let (tx, rx) = mpsc::channel();
+        gtk::glib::idle_add_once(move || {
+            self.free_with_native_video_area();
+            let _ = tx.send(());
+        });
+        let _ = rx.recv_timeout(Duration::from_secs(1));
+    }
+
+    fn free_with_native_video_area(&self) {
+        let _ = crate::platform_window::with_native_video_area(|area| {
+            use gtk::prelude::*;
+
+            area.make_current();
+            self.free_on_current_thread();
+        });
+    }
+
+    fn free_on_current_thread(&self) {
+        if self.freed.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        unsafe {
+            (self.api.mpv_render_context_set_update_callback)(self.as_ptr(), None, ptr::null_mut());
+            (self.api.mpv_render_context_free)(self.as_ptr());
+        }
+    }
+}
+
 pub(crate) fn launch(
     app: &AppHandle,
     server: &SavedServer,
@@ -499,6 +748,8 @@ pub(crate) fn launch(
         },
     )?;
     session.initialize()?;
+    #[cfg(target_os = "linux")]
+    session.initialize_render_context(app)?;
     session.command(&["loadfile", stream_url, "replace"])?;
     if let Some(url) = subtitle_url {
         let _ = session.command(&["sub-add", url, "select"]);
@@ -763,6 +1014,94 @@ fn clear_sessions() {
 }
 
 pub(crate) fn restack_all(_app: &AppHandle) {}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn render_native_video(area: &gtk::GLArea) -> gtk::glib::Propagation {
+    if let Some(context) = active_render_context() {
+        context.render_gl_area(area);
+    }
+    gtk::glib::Propagation::Stop
+}
+
+#[cfg(target_os = "linux")]
+fn active_render_context() -> Option<Arc<MpvRenderContext>> {
+    ACTIVE_RENDER_CONTEXT
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|context| context.clone())
+}
+
+#[cfg(target_os = "linux")]
+fn set_active_render_context(context: Arc<MpvRenderContext>) {
+    if let Ok(mut active) = ACTIVE_RENDER_CONTEXT
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+    {
+        *active = Some(context);
+    }
+    crate::platform_window::queue_native_video_render();
+}
+
+#[cfg(target_os = "linux")]
+fn clear_active_render_context(context: *mut c_void) {
+    if let Ok(mut active) = ACTIVE_RENDER_CONTEXT
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+    {
+        let should_clear = active
+            .as_ref()
+            .map(|active| active.as_ptr() == context)
+            .unwrap_or(false);
+        if should_clear {
+            *active = None;
+        }
+    }
+    crate::platform_window::queue_native_video_render();
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn mpv_render_update_callback(_context: *mut c_void) {
+    crate::platform_window::queue_native_video_render();
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" fn mpv_gl_get_proc_address(
+    _context: *mut c_void,
+    name: *const c_char,
+) -> *mut c_void {
+    if name.is_null() {
+        return ptr::null_mut();
+    }
+
+    if let Some(address) = epoxy_get_proc_address(name) {
+        return address;
+    }
+
+    process_symbol_address(name).unwrap_or(ptr::null_mut())
+}
+
+#[cfg(target_os = "linux")]
+fn epoxy_get_proc_address(name: *const c_char) -> Option<*mut c_void> {
+    let library = EPOXY_LIBRARY
+        .get_or_init(|| unsafe { libloading::os::unix::Library::new("libepoxy.so.0").ok() })
+        .as_ref()?;
+    let loader = unsafe {
+        library
+            .get::<EpoxyGetProcAddress>(b"epoxy_get_proc_address\0")
+            .ok()?
+    };
+    let address = unsafe { loader(name) };
+    (!address.is_null()).then_some(address)
+}
+
+#[cfg(target_os = "linux")]
+fn process_symbol_address(name: *const c_char) -> Option<*mut c_void> {
+    let symbol_name = unsafe { CStr::from_ptr(name).to_bytes_with_nul() };
+    let library = libloading::os::unix::Library::this();
+    let symbol = unsafe { library.get::<unsafe extern "C" fn()>(symbol_name).ok()? };
+    Some(*symbol as *mut c_void)
+}
 
 fn remember_session(play_session_id: String, session: Arc<MpvSession>) {
     if let Ok(mut sessions) = SESSIONS.get_or_init(|| Mutex::new(HashMap::new())).lock() {

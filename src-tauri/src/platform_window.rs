@@ -1,8 +1,15 @@
 use serde::Serialize;
+#[cfg(target_os = "linux")]
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Runtime;
 
 static NATIVE_VIDEO_OVERLAY_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "linux")]
+thread_local! {
+    static NATIVE_VIDEO_AREA: RefCell<Option<gtk::GLArea>> = const { RefCell::new(None) };
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DesktopPlatform {
@@ -88,16 +95,39 @@ fn install_native_video_overlay<R: Runtime>(
         video_area.set_vexpand(true);
         video_area.set_auto_render(false);
         video_area.set_has_alpha(false);
+        video_area.connect_render(|area, _context| crate::mpv::render_native_video(area));
 
         container.remove(&webview);
         overlay.add(&video_area);
         overlay.add_overlay(&webview);
         overlay.set_overlay_pass_through(&webview, false);
         container.pack_start(&overlay, true, true, 0);
+        NATIVE_VIDEO_AREA.with(|stored| {
+            *stored.borrow_mut() = Some(video_area);
+        });
         container.show_all();
         NATIVE_VIDEO_OVERLAY_INSTALLED.store(true, Ordering::SeqCst);
     })?;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn with_native_video_area<T>(action: impl FnOnce(&gtk::GLArea) -> T) -> Option<T> {
+    NATIVE_VIDEO_AREA.with(|stored| stored.borrow().as_ref().map(action))
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn queue_native_video_render() {
+    if !gtk::glib::MainContext::default().is_owner() {
+        gtk::glib::idle_add_once(queue_native_video_render);
+        return;
+    }
+
+    let _ = with_native_video_area(|area| {
+        use gtk::prelude::*;
+
+        area.queue_render();
+    });
 }
 
 pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
