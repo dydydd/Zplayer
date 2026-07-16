@@ -39,7 +39,8 @@ export function DetailView({
   const item = payload.item;
   const backVisible = useFloatingBackVisible(item.id);
   const entryEpisode = payload.episodes.find((episode) => episode.id === entryItemId);
-  const initialSeasonId = entryEpisode?.seasonId ?? payload.seasons[0]?.id ?? "";
+  const sortedSeasons = useMemo(() => sortDetailItems(payload.seasons), [payload.seasons]);
+  const initialSeasonId = entryEpisode?.seasonId ?? sortedSeasons[0]?.id ?? "";
   const initialEpisodeId = entryEpisode?.id ?? "";
   const [seasonId, setSeasonId] = useState(initialSeasonId);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState(initialEpisodeId);
@@ -63,11 +64,11 @@ export function DetailView({
     [payload.children],
   );
   const episodes = useMemo(() => {
-    if (!payload.episodes.length) return fallbackPlayableChildren;
-    if (!seasonId) return payload.episodes;
-    const season = payload.seasons.find((entry) => entry.id === seasonId);
-    return payload.episodes.filter((episode) => episode.seasonId === seasonId || episode.seasonName === season?.name);
-  }, [fallbackPlayableChildren, payload.episodes, payload.seasons, seasonId]);
+    const source = payload.episodes.length ? payload.episodes : fallbackPlayableChildren;
+    if (!seasonId) return sortDetailItems(source);
+    const season = sortedSeasons.find((entry) => entry.id === seasonId);
+    return sortDetailItems(source.filter((episode) => episode.seasonId === seasonId || episode.seasonName === season?.name));
+  }, [fallbackPlayableChildren, payload.episodes, seasonId, sortedSeasons]);
   const selectedEpisode = episodes.find((episode) => episode.id === selectedEpisodeId) ?? episodes[0];
   const selectedPlayableId = selectedEpisode?.id ?? item.id;
   const currentMediaSources = mediaSourcesByItem.get(selectedPlayableId) ?? [];
@@ -75,7 +76,7 @@ export function DetailView({
   const selectedFacts = mediaVersionFacts(selectedSource);
   const selectedAudio = selectedSource?.audioStreams.find((stream) => stream.index === audioStreamIndex) ?? selectedSource?.audioStreams.find((stream) => stream.isDefault) ?? selectedSource?.audioStreams[0];
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
-  const currentSeason = payload.seasons.find((season) => season.id === seasonId);
+  const currentSeason = sortedSeasons.find((season) => season.id === seasonId);
   const runtime = runtimeLabel(item.runTimeTicks);
   const collectionLike = item.itemType === "BoxSet" || item.itemType === "CollectionFolder";
 
@@ -223,7 +224,7 @@ export function DetailView({
           <div className="detail-episode-shelf">
             <div className="detail-section-head">
               <div className="episode-title-row">
-                {payload.seasons.length > 1 ? (
+                {sortedSeasons.length > 1 ? (
                   <div className={`season-switcher ${seasonPickerOpen ? "open" : ""}`} onMouseEnter={keepSeasonPickerOpen} onMouseLeave={closeSeasonPickerSoon}>
                     <button className={`season-toggle ${seasonChanged ? "changed" : ""}`} onAnimationEnd={() => setSeasonChanged(false)} onClick={() => setSeasonPickerOpen((open) => !open)}>
                       <span>{currentSeason?.name ?? t("detail.season")}</span>
@@ -231,7 +232,7 @@ export function DetailView({
                     </button>
                     {seasonPickerOpen && (
                       <div className="season-menu">
-                        {payload.seasons.filter((season) => season.id !== seasonId).map((season) => (
+                        {sortedSeasons.filter((season) => season.id !== seasonId).map((season) => (
                           <button key={season.id} onClick={() => {
                             setSeasonId(season.id);
                             setSelectedEpisodeId("");
@@ -401,6 +402,20 @@ function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
 
 function isPlayableDetailItem(item: { itemType: string }) {
   return ["Movie", "Episode", "Video"].includes(item.itemType);
+}
+
+function sortDetailItems<T extends { name: string; seasonNumber?: number | null; episodeNumber?: number | null }>(items: T[]) {
+  return [...items].sort((left, right) => (
+    compareOptionalNumber(left.seasonNumber, right.seasonNumber)
+    || compareOptionalNumber(left.episodeNumber, right.episodeNumber)
+    || left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" })
+  ));
+}
+
+function compareOptionalNumber(left?: number | null, right?: number | null) {
+  const leftValue = typeof left === "number" ? left : Number.POSITIVE_INFINITY;
+  const rightValue = typeof right === "number" ? right : Number.POSITIVE_INFINITY;
+  return leftValue - rightValue;
 }
 
 function versionName(source: MediaVersion, index: number) {
