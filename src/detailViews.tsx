@@ -77,6 +77,7 @@ export function DetailView({
   const selectedAudio = selectedSource?.audioStreams.find((stream) => stream.index === audioStreamIndex) ?? selectedSource?.audioStreams.find((stream) => stream.isDefault) ?? selectedSource?.audioStreams[0];
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
   const currentSeason = sortedSeasons.find((season) => season.id === seasonId);
+  const displayedEpisodeCount = typeof currentSeason?.childCount === "number" ? currentSeason.childCount : episodes.length;
   const runtime = runtimeLabel(item.runTimeTicks);
   const collectionLike = item.itemType === "BoxSet" || item.itemType === "CollectionFolder";
 
@@ -251,7 +252,7 @@ export function DetailView({
                 ) : (
                   <h2>{t("detail.episodes")}</h2>
                 )}
-                <span className="episode-count">{t("common.episodesCount", { count: episodes.length })}</span>
+                <span className="episode-count">{t("common.episodesCount", { count: displayedEpisodeCount })}</span>
               </div>
               <div className="episode-tools">
                 <div className="episode-jump-wrap" onMouseEnter={keepJumpPickerOpen} onMouseLeave={closeJumpPickerSoon}>
