@@ -62,6 +62,8 @@ export type LinuxWindowDiagnostics = {
   xdgSessionType?: string | null;
   waylandDisplaySet: boolean;
   gdkBackend?: string | null;
+  waylandRequired: boolean;
+  gdkBackendWayland: boolean;
   opaqueWindow: boolean;
 };
 

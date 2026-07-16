@@ -20,7 +20,14 @@ pub(crate) struct LinuxWindowDiagnostics {
     pub(crate) xdg_session_type: Option<String>,
     pub(crate) wayland_display_set: bool,
     pub(crate) gdk_backend: Option<String>,
+    pub(crate) wayland_required: bool,
+    pub(crate) gdk_backend_wayland: bool,
     pub(crate) opaque_window: bool,
+}
+
+pub(crate) fn prepare_linux_wayland_environment() {
+    #[cfg(target_os = "linux")]
+    std::env::set_var("GDK_BACKEND", "wayland");
 }
 
 pub(crate) fn create_main_window<R: Runtime>(
@@ -60,6 +67,7 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         current_platform(),
         xdg_session_type.as_deref(),
         wayland_display.as_deref(),
+        gdk_backend.as_deref(),
     ) == WindowTransparency::Opaque;
 
     LinuxWindowDiagnostics {
@@ -67,6 +75,8 @@ pub(crate) fn diagnostics() -> LinuxWindowDiagnostics {
         wayland_display_set: wayland_display
             .as_deref()
             .is_some_and(|value| !value.is_empty()),
+        wayland_required: current_platform() == DesktopPlatform::Linux,
+        gdk_backend_wayland: is_wayland_backend(gdk_backend.as_deref()),
         gdk_backend,
         opaque_window,
     }
@@ -80,12 +90,25 @@ pub(crate) fn is_wayland_session(
         || wayland_display.is_some_and(|value| !value.is_empty())
 }
 
+pub(crate) fn is_wayland_backend(gdk_backend: Option<&str>) -> bool {
+    gdk_backend.is_some_and(|value| {
+        value
+            .split(',')
+            .map(str::trim)
+            .any(|backend| backend.eq_ignore_ascii_case("wayland"))
+    })
+}
+
 pub(crate) fn window_transparency(
     platform: DesktopPlatform,
     xdg_session_type: Option<&str>,
     wayland_display: Option<&str>,
+    gdk_backend: Option<&str>,
 ) -> WindowTransparency {
-    if platform == DesktopPlatform::Linux && is_wayland_session(xdg_session_type, wayland_display) {
+    if platform == DesktopPlatform::Linux
+        && (is_wayland_session(xdg_session_type, wayland_display)
+            || is_wayland_backend(gdk_backend))
+    {
         WindowTransparency::Opaque
     } else {
         WindowTransparency::Transparent
@@ -115,17 +138,36 @@ mod tests {
     }
 
     #[test]
+    fn detects_wayland_from_gdk_backend() {
+        assert!(is_wayland_backend(Some("wayland")));
+        assert!(is_wayland_backend(Some("wayland,x11")));
+        assert!(is_wayland_backend(Some("x11, wayland")));
+        assert!(!is_wayland_backend(Some("x11")));
+        assert!(!is_wayland_backend(Some("waylandish")));
+        assert!(!is_wayland_backend(None));
+    }
+
+    #[test]
     fn chooses_opaque_window_only_for_linux_wayland() {
         assert_eq!(
-            window_transparency(DesktopPlatform::Linux, Some("wayland"), None),
+            window_transparency(DesktopPlatform::Linux, Some("wayland"), None, None),
             WindowTransparency::Opaque
         );
         assert_eq!(
-            window_transparency(DesktopPlatform::Linux, Some("x11"), None),
+            window_transparency(DesktopPlatform::Linux, Some("x11"), None, Some("wayland")),
+            WindowTransparency::Opaque
+        );
+        assert_eq!(
+            window_transparency(DesktopPlatform::Linux, Some("x11"), None, None),
             WindowTransparency::Transparent
         );
         assert_eq!(
-            window_transparency(DesktopPlatform::Windows, Some("wayland"), Some("wayland-0")),
+            window_transparency(
+                DesktopPlatform::Windows,
+                Some("wayland"),
+                Some("wayland-0"),
+                Some("wayland"),
+            ),
             WindowTransparency::Transparent
         );
     }

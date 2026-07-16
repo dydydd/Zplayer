@@ -210,6 +210,8 @@ export function SettingsView({
                   `XDG_SESSION_TYPE: ${linuxWindowDiagnostics.xdgSessionType ?? t("common.unset")}`,
                   `WAYLAND_DISPLAY: ${linuxWindowDiagnostics.waylandDisplaySet ? "set" : t("common.unset")}`,
                   `GDK_BACKEND: ${linuxWindowDiagnostics.gdkBackend ?? t("common.unset")}`,
+                  `Wayland only: ${linuxWindowDiagnostics.waylandRequired ? t("common.yes") : t("common.no")}`,
+                  `Wayland backend: ${linuxWindowDiagnostics.gdkBackendWayland ? t("common.yes") : t("common.no")}`,
                   `Opaque window: ${linuxWindowDiagnostics.opaqueWindow ? t("common.yes") : t("common.no")}`,
                 ].join("\n")}</pre>
               )}
