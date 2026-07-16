@@ -425,7 +425,11 @@ function compareOptionalNumber(left?: number | null, right?: number | null) {
 }
 
 function episodeCountFrom(...counts: Array<number | null | undefined>) {
-  return counts.find((count) => typeof count === "number" && count > 0) ?? 0;
+  let max = 0;
+  for (const count of counts) {
+    if (typeof count === "number" && count > max) max = count;
+  }
+  return max;
 }
 
 function versionName(source: MediaVersion, index: number) {
