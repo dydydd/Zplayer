@@ -4,13 +4,20 @@ import { useTranslation } from "react-i18next";
 import { ipc } from "./ipc";
 import i18n from "./i18n";
 import { UiIcon } from "./icons";
-import type { ItemDetailPayload, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
+import type { ItemDetailPayload, MediaItem, MediaVersion, PlaybackCommand, PlaybackState, StreamInfo } from "./types";
 import { bg, episodeLabel, runtimeLabel } from "./media";
 import { subtitleDialogFilters } from "./subtitleDialog";
 import { formatTime, mediaVersionFacts } from "./viewLogic";
 import { Image, Poster, ScrollableStage, useFloatingBackVisible } from "./viewParts";
 
 type DetailPicker = "source" | "quality" | "audio" | "subtitle";
+
+type SeasonOption = {
+  id: string;
+  name: string;
+  seasonNumber?: number | null;
+  childCount?: number | null;
+};
 
 export function DetailView({
   payload,
@@ -39,8 +46,17 @@ export function DetailView({
   const item = payload.item;
   const backVisible = useFloatingBackVisible(item.id);
   const entryEpisode = payload.episodes.find((episode) => episode.id === entryItemId);
-  const sortedSeasons = useMemo(() => sortDetailItems(payload.seasons), [payload.seasons]);
-  const initialSeasonId = entryEpisode?.seasonId ?? sortedSeasons[0]?.id ?? "";
+  const fallbackPlayableChildren = useMemo(
+    () => payload.children.filter(isPlayableDetailItem),
+    [payload.children],
+  );
+  const episodeSource = useMemo(
+    () => payload.episodes.length ? payload.episodes : fallbackPlayableChildren,
+    [fallbackPlayableChildren, payload.episodes],
+  );
+  const sortedSeasons = useMemo(() => buildSeasonOptions(payload.seasons, episodeSource), [episodeSource, payload.seasons]);
+  const initialSeason = entryEpisode ? sortedSeasons.find((season) => seasonMatchesEpisode(season, entryEpisode)) : undefined;
+  const initialSeasonId = initialSeason?.id ?? sortedSeasons[0]?.id ?? "";
   const initialEpisodeId = entryEpisode?.id ?? "";
   const [seasonId, setSeasonId] = useState(initialSeasonId);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState(initialEpisodeId);
@@ -59,16 +75,11 @@ export function DetailView({
   const initialMediaSourceItemId = initialEpisodeId || payload.episodes[0]?.id || item.id;
   const [mediaSourcesByItem, setMediaSourcesByItem] = useState(() => new Map([[initialMediaSourceItemId, payload.mediaSources]]));
   const mediaSourcesByItemRef = useRef(mediaSourcesByItem);
-  const fallbackPlayableChildren = useMemo(
-    () => payload.children.filter(isPlayableDetailItem),
-    [payload.children],
-  );
   const episodes = useMemo(() => {
-    const source = payload.episodes.length ? payload.episodes : fallbackPlayableChildren;
-    if (!seasonId) return sortDetailItems(source);
+    if (!seasonId) return sortDetailItems(episodeSource);
     const season = sortedSeasons.find((entry) => entry.id === seasonId);
-    return sortDetailItems(source.filter((episode) => episode.seasonId === seasonId || episode.seasonName === season?.name));
-  }, [fallbackPlayableChildren, payload.episodes, seasonId, sortedSeasons]);
+    return sortDetailItems(episodeSource.filter((episode) => season ? seasonMatchesEpisode(season, episode) : true));
+  }, [episodeSource, seasonId, sortedSeasons]);
   const selectedEpisode = episodes.find((episode) => episode.id === selectedEpisodeId) ?? episodes[0];
   const selectedPlayableId = selectedEpisode?.id ?? item.id;
   const currentMediaSources = mediaSourcesByItem.get(selectedPlayableId) ?? [];
@@ -408,6 +419,66 @@ function qualityLabel(source: ItemDetailPayload["mediaSources"][number]) {
 
 function isPlayableDetailItem(item: { itemType: string }) {
   return ["Movie", "Episode", "Video"].includes(item.itemType);
+}
+
+function buildSeasonOptions(seasons: MediaItem[], episodes: MediaItem[]): SeasonOption[] {
+  const options = new Map<string, SeasonOption>();
+  seasons.forEach((season) => {
+    options.set(season.id, {
+      id: season.id,
+      name: season.name,
+      seasonNumber: season.seasonNumber,
+      childCount: season.childCount,
+    });
+  });
+
+  episodes.forEach((episode) => {
+    const existing = [...options.values()].find((season) => seasonMatchesEpisode(season, episode));
+    if (existing) {
+      if (existing.childCount === undefined || existing.childCount === null) {
+        existing.childCount = 1;
+      } else if (!seasons.some((season) => season.id === existing.id && season.childCount)) {
+        existing.childCount += 1;
+      }
+      return;
+    }
+
+    const id = seasonOptionIdFromEpisode(episode);
+    if (!id) return;
+    options.set(id, {
+      id,
+      name: episode.seasonName ?? seasonNameFromNumber(episode.seasonNumber),
+      seasonNumber: episode.seasonNumber,
+      childCount: 1,
+    });
+  });
+
+  return sortDetailItems([...options.values()]);
+}
+
+function seasonMatchesEpisode(season: SeasonOption, episode: MediaItem) {
+  return (
+    (!!episode.seasonId && season.id === episode.seasonId)
+    || (
+      typeof season.seasonNumber === "number"
+      && typeof episode.seasonNumber === "number"
+      && season.seasonNumber === episode.seasonNumber
+    )
+    || (!!episode.seasonName && season.name === episode.seasonName)
+  );
+}
+
+function seasonOptionIdFromEpisode(episode: MediaItem) {
+  if (episode.seasonId) return episode.seasonId;
+  if (typeof episode.seasonNumber === "number") return `season-number:${episode.seasonNumber}`;
+  if (episode.seasonName) return `season-name:${episode.seasonName}`;
+  return "";
+}
+
+function seasonNameFromNumber(seasonNumber?: number | null) {
+  return typeof seasonNumber === "number"
+    ? `${i18n.t("detail.season")} ${seasonNumber}`
+    : i18n.t("detail.season");
 }
 
 function sortDetailItems<T extends { name: string; seasonNumber?: number | null; episodeNumber?: number | null }>(items: T[]) {
