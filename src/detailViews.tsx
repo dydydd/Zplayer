@@ -77,7 +77,12 @@ export function DetailView({
   const selectedAudio = selectedSource?.audioStreams.find((stream) => stream.index === audioStreamIndex) ?? selectedSource?.audioStreams.find((stream) => stream.isDefault) ?? selectedSource?.audioStreams[0];
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
   const currentSeason = sortedSeasons.find((season) => season.id === seasonId);
-  const displayedEpisodeCount = typeof currentSeason?.childCount === "number" ? currentSeason.childCount : episodes.length;
+  const displayedEpisodeCount = episodeCountFrom(
+    payload.episodeTotalCount,
+    item.childCount,
+    currentSeason?.childCount,
+    episodes.length,
+  );
   const runtime = runtimeLabel(item.runTimeTicks);
   const collectionLike = item.itemType === "BoxSet" || item.itemType === "CollectionFolder";
 
@@ -417,6 +422,10 @@ function compareOptionalNumber(left?: number | null, right?: number | null) {
   const leftValue = typeof left === "number" ? left : Number.POSITIVE_INFINITY;
   const rightValue = typeof right === "number" ? right : Number.POSITIVE_INFINITY;
   return leftValue - rightValue;
+}
+
+function episodeCountFrom(...counts: Array<number | null | undefined>) {
+  return counts.find((count) => typeof count === "number" && count > 0) ?? 0;
 }
 
 function versionName(source: MediaVersion, index: number) {

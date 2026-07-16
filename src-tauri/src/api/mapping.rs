@@ -46,7 +46,7 @@ pub(crate) fn map_item(server: &SavedServer, item: ApiItem) -> MediaItem {
         run_time_ticks: item.run_time_ticks,
         playback_position_ticks,
         played_percentage,
-        child_count: item.child_count,
+        child_count: item.child_count.or(item.recursive_item_count),
         season_number: item.parent_index_number,
         episode_number: item.index_number,
         series_name: item.series_name,

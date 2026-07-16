@@ -325,7 +325,7 @@ pub(crate) fn get_show_episodes(
     server: &SavedServer,
     series_id: &str,
     season_id: Option<&str>,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<(Vec<MediaItem>, usize), String> {
     let mut params = vec![
         ("UserId", server.user_id.clone()),
         ("userId", server.user_id.clone()),
@@ -341,8 +341,6 @@ pub(crate) fn get_show_episodes(
         ),
         ("SortOrder", "Ascending".to_string()),
         ("sortOrder", "Ascending".to_string()),
-        ("IsMissing", "false".to_string()),
-        ("isMissing", "false".to_string()),
         ("EnableImages", "true".to_string()),
         ("enableImages", "true".to_string()),
         ("EnableUserData", "true".to_string()),
@@ -352,7 +350,7 @@ pub(crate) fn get_show_episodes(
         params.push(("SeasonId", season_id.to_string()));
         params.push(("seasonId", season_id.to_string()));
     }
-    get_items(
+    get_items_page(
         client,
         server,
         &format!("Shows/{series_id}/Episodes"),
@@ -1158,6 +1156,7 @@ pub(crate) fn item_fields() -> String {
         "ProductionYear",
         "RunTimeTicks",
         "ChildCount",
+        "RecursiveItemCount",
         "ParentBackdropItemId",
         "ParentBackdropImageTags",
         "ParentLogoItemId",

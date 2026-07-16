@@ -222,6 +222,7 @@ export type ItemDetailPayload = {
   children: MediaItem[];
   seasons: MediaItem[];
   episodes: MediaItem[];
+  episodeTotalCount?: number | null;
   mediaSources: MediaVersion[];
   people: MediaPerson[];
   art: MediaArt[];

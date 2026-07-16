@@ -60,6 +60,7 @@ pub(crate) struct ItemDetailPayload {
     pub(crate) children: Vec<MediaItem>,
     pub(crate) seasons: Vec<MediaItem>,
     pub(crate) episodes: Vec<MediaItem>,
+    pub(crate) episode_total_count: Option<usize>,
     pub(crate) media_sources: Vec<MediaVersion>,
     pub(crate) people: Vec<MediaPerson>,
     pub(crate) art: Vec<MediaArt>,

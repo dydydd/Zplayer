@@ -619,7 +619,7 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
     } else {
         item.series_id.as_deref()
     };
-    let (children, seasons, episodes) = thread::scope(|scope| {
+    let (children, seasons, episodes_result) = thread::scope(|scope| {
         let children = scope.spawn(|| api::get_item_children(&client, &server, &item.id));
         let seasons = scope.spawn(|| {
             series_id
@@ -629,7 +629,7 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
         let episodes = scope.spawn(|| {
             series_id
                 .map(|id| api::get_show_episodes(&client, &server, id, None))
-                .unwrap_or_else(|| Ok(Vec::new()))
+                .unwrap_or_else(|| Ok((Vec::new(), 0)))
         });
         Ok::<_, String>((
             children
@@ -645,6 +645,7 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
                 .unwrap_or_default(),
         ))
     })?;
+    let (episodes, episode_total_count) = episodes_result;
     let selected_media_item = if raw.item_type.as_deref() == Some("Episode") {
         entry_item.clone()
     } else {
@@ -657,6 +658,7 @@ fn load_item_sync(app: AppHandle, input: ItemInput) -> Result<ItemDetailPayload,
         children,
         seasons,
         episodes,
+        episode_total_count: Some(episode_total_count),
         media_sources,
         people: Vec::new(),
         art: Vec::new(),

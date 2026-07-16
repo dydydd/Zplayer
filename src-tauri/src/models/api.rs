@@ -108,6 +108,7 @@ pub(crate) struct ApiItem {
     pub(crate) community_rating: Option<f64>,
     pub(crate) run_time_ticks: Option<i64>,
     pub(crate) child_count: Option<i64>,
+    pub(crate) recursive_item_count: Option<i64>,
     pub(crate) index_number: Option<i64>,
     pub(crate) parent_index_number: Option<i64>,
     pub(crate) series_name: Option<String>,
