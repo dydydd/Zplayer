@@ -14,6 +14,9 @@ import { emptyForm, withAppSettingsDefaults } from "./types";
 import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, preferencePayload, preferredStreamIndex, relativeEpisodeId, scopedPlaybackPreferenceKey } from "./appLogic";
 import "./App.css";
 
+const HOME_CACHE_STORAGE_PREFIX = "zplayer:home-cache:v1:";
+const HOME_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14;
+
 type HistoryEntry = {
   view: View;
   scrollTop: number;
@@ -31,6 +34,72 @@ type SubtitleSelection = {
   subtitleStreamIndex?: number;
   subtitleStreamPosition?: number;
 };
+
+function homeCacheStorageKey(serverId: string) {
+  return `${HOME_CACHE_STORAGE_PREFIX}${serverId}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isHomePayload(value: unknown): value is HomePayload {
+  if (!isRecord(value) || !isRecord(value.server)) return false;
+  return (
+    typeof value.server.id === "string"
+    && typeof value.server.name === "string"
+    && Array.isArray(value.libraries)
+    && Array.isArray(value.libraryLatest)
+    && Array.isArray(value.latest)
+    && Array.isArray(value.recommendedMovies)
+    && Array.isArray(value.recommendedShows)
+    && Array.isArray(value.resumeItems)
+    && Array.isArray(value.favoriteItems)
+    && Array.isArray(value.recentItems)
+  );
+}
+
+function readStoredHomeCache(serverId: string): HomePayload | null {
+  try {
+    const raw = localStorage.getItem(homeCacheStorageKey(serverId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed) || typeof parsed.savedAt !== "number" || !isHomePayload(parsed.payload)) {
+      return null;
+    }
+    if (Date.now() - parsed.savedAt > HOME_CACHE_MAX_AGE_MS || parsed.payload.server.id !== serverId) {
+      localStorage.removeItem(homeCacheStorageKey(serverId));
+      return null;
+    }
+    return parsed.payload;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredHomeCache(home: HomePayload) {
+  try {
+    localStorage.setItem(homeCacheStorageKey(home.server.id), JSON.stringify({
+      savedAt: Date.now(),
+      payload: home,
+    }));
+  } catch {
+    // localStorage is an optimization; the in-memory cache still works.
+  }
+}
+
+function clearStoredHomeCaches() {
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(HOME_CACHE_STORAGE_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage can be unavailable in restricted environments.
+  }
+}
 
 function samePlaybackState(left: PlaybackState | null, right: PlaybackState | null) {
   return left?.timePos === right?.timePos
@@ -194,7 +263,7 @@ function App() {
 
   useEffect(() => {
     if (resolvedSettings.metadataCacheEnabled) return;
-    homeCache.current.clear();
+    clearHomeMetadataCaches();
     detailCache.current.clear();
     libraryCache.current.clear();
   }, [resolvedSettings.metadataCacheEnabled]);
@@ -517,9 +586,20 @@ function App() {
   }
 
   function invalidatePlaybackCaches(itemId?: string | null, serverId?: string | null) {
-    homeCache.current.clear();
+    clearHomeMetadataCaches();
     libraryCache.current.clear();
     if (itemId) detailCache.current.delete(itemCacheKey(itemId, serverId));
+  }
+
+  function rememberHomePayload(payload: HomePayload) {
+    if (!resolvedSettings.metadataCacheEnabled) return;
+    homeCache.current.set(payload.server.id, payload);
+    writeStoredHomeCache(payload);
+  }
+
+  function clearHomeMetadataCaches() {
+    homeCache.current.clear();
+    clearStoredHomeCaches();
   }
 
   function refreshAfterPlaybackStop(itemId?: string | null, targetView: View = viewRef.current) {
@@ -545,12 +625,32 @@ function App() {
       }
       return;
     }
+    const stored = resolvedSettings.metadataCacheEnabled && activeServerId ? readStoredHomeCache(activeServerId) : null;
+    if (stored) {
+      homeCache.current.set(stored.server.id, stored);
+      setHome(stored);
+      const currentRequest = ++requestId.current;
+      void refreshHomeInBackground(stored.server.id, currentRequest);
+      return;
+    }
     const currentRequest = ++requestId.current;
     const result = await run(t("loading.home"), () => ipc.loadHome());
     if (result && currentRequest === requestId.current) {
-      if (resolvedSettings.metadataCacheEnabled) homeCache.current.set(result.server.id, result);
+      rememberHomePayload(result);
       setHome(result);
       void loadHomeMore(result.server.id, currentRequest);
+    }
+  }
+
+  async function refreshHomeInBackground(serverId: string, parentRequest: number) {
+    try {
+      const result = await ipc.loadHome();
+      if (parentRequest !== requestId.current || result.server.id !== serverId) return;
+      rememberHomePayload(result);
+      setHome(result);
+      void loadHomeMore(result.server.id, parentRequest);
+    } catch {
+      // Keep the stored home visible while the server catches up.
     }
   }
 
@@ -568,7 +668,7 @@ function App() {
           favoriteItems: more.favoriteItems,
           recentItems: more.recentItems,
         };
-        if (resolvedSettings.metadataCacheEnabled) homeCache.current.set(more.serverId, next);
+        rememberHomePayload(next);
         return next;
       });
     } catch {
@@ -732,7 +832,7 @@ function App() {
       setForm(emptyForm);
       setTestedLogin(null);
       setEditingServerId("");
-      homeCache.current.clear();
+      clearHomeMetadataCaches();
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
@@ -750,7 +850,7 @@ function App() {
       setServers((current) => current.map((server) => (
         server.id === result.id ? { ...server, ...result, active: true } : { ...server, active: false }
       )));
-      homeCache.current.clear();
+      clearHomeMetadataCaches();
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
@@ -765,7 +865,7 @@ function App() {
       ipc.deleteServer(serverId),
     );
     if (result !== null) {
-      homeCache.current.clear();
+      clearHomeMetadataCaches();
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
