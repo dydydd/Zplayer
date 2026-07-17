@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useLayoutEffect } from "react";
 import { useDeferredValue } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -910,6 +910,13 @@ function App() {
   }
 
   async function deleteServer(serverId: string) {
+    const server = servers.find((entry) => entry.id === serverId);
+    const confirmed = await ask(
+      t("server.deleteConfirmMessage", { name: server?.name ?? t("server.thisServer") }),
+      { title: t("server.deleteConfirmTitle"), kind: "warning" },
+    );
+    if (!confirmed) return;
+
     const result = await run(t("loading.deleteServer"), () =>
       ipc.deleteServer(serverId),
     );
