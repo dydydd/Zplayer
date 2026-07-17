@@ -188,8 +188,8 @@ export function SettingsView({
             <input
               className="settings-path-input"
               type="password"
-              value={draft.tmdbAccessToken}
-              onChange={(event) => update("tmdbAccessToken", event.target.value)}
+              value={draft.tmdbApiKey}
+              onChange={(event) => update("tmdbApiKey", event.target.value)}
               placeholder={t("settings.tmdbTokenPlaceholder")}
               autoComplete="off"
             />

@@ -301,11 +301,11 @@ pub(crate) async fn load_watch_calendar(app: AppHandle) -> Result<WatchCalendarP
 fn load_watch_calendar_sync(app: AppHandle) -> Result<WatchCalendarPayload, String> {
     let server = store::active_server(&app)?;
     let settings = store::settings(&app)?;
-    let Some(access_token) = settings
-        .tmdb_access_token
+    let Some(api_key) = settings
+        .tmdb_api_key
         .as_deref()
         .map(str::trim)
-        .filter(|token| !token.is_empty())
+        .filter(|key| !key.is_empty())
     else {
         return Ok(WatchCalendarPayload {
             server: store::server_summary(&server),
@@ -317,7 +317,7 @@ fn load_watch_calendar_sync(app: AppHandle) -> Result<WatchCalendarPayload, Stri
     };
 
     let server_client = api::http_client_with_timeout(server.use_system_proxy, HOME_MORE_TIMEOUT)?;
-    let (series, series_scanned) = api::get_tracked_series_with_tmdb_ids(
+    let (series, series_scanned) = api::get_favorite_series_with_tmdb_ids(
         &server_client,
         &server,
         WATCH_CALENDAR_SERIES_LIMIT,
@@ -335,7 +335,7 @@ fn load_watch_calendar_sync(app: AppHandle) -> Result<WatchCalendarPayload, Stri
                     let client = &tmdb_client;
                     scope.spawn(move || {
                         let detail =
-                            api::tmdb_tv_details(client, access_token, series.tmdb_id, language)?;
+                            api::tmdb_tv_details(client, api_key, series.tmdb_id, language)?;
                         Ok::<_, String>((series, detail))
                     })
                 })

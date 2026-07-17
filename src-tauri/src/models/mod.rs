@@ -46,7 +46,7 @@ mod tests {
         assert!(!settings.diagnostics_enabled);
         assert!(settings.autoplay_next_episode);
         assert_eq!(settings.language, "auto");
-        assert_eq!(settings.tmdb_access_token, None);
+        assert_eq!(settings.tmdb_api_key, None);
     }
 
     #[test]
@@ -63,7 +63,7 @@ mod tests {
             diagnostics_enabled: Some(true),
             autoplay_next_episode: Some(false),
             language: Some("fr-FR".to_string()),
-            tmdb_access_token: Some("  tmdb-token  ".to_string()),
+            tmdb_api_key: Some("  tmdb-key  ".to_string()),
         });
 
         assert_eq!(settings.mpv_path.as_deref(), Some("C:/libmpv/libmpv-2.dll"));
@@ -77,6 +77,6 @@ mod tests {
         assert!(settings.diagnostics_enabled);
         assert!(!settings.autoplay_next_episode);
         assert_eq!(settings.language, "auto");
-        assert_eq!(settings.tmdb_access_token.as_deref(), Some("tmdb-token"));
+        assert_eq!(settings.tmdb_api_key.as_deref(), Some("tmdb-key"));
     }
 }

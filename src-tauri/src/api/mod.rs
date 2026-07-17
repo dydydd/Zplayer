@@ -294,27 +294,32 @@ pub(crate) fn get_library_items(
         .or_else(|_| get_items_page(client, server, "Items", &jellyfin_params))
 }
 
-pub(crate) fn get_tracked_series_with_tmdb_ids(
+pub(crate) fn get_favorite_series_with_tmdb_ids(
     client: &Client,
     server: &SavedServer,
     limit: usize,
 ) -> Result<(Vec<TrackedSeries>, usize), String> {
     let emby_params = vec![
+        ("UserId", server.user_id.clone()),
         ("Recursive", "true".to_string()),
         ("Limit", limit.to_string()),
         ("IncludeItemTypes", "Series".to_string()),
+        ("Filters", "IsFavorite".to_string()),
         ("SortBy", "SortName".to_string()),
         ("SortOrder", "Ascending".to_string()),
         ("Fields", item_fields()),
+        ("EnableUserData", "true".to_string()),
     ];
     let jellyfin_params = vec![
         ("userId", server.user_id.clone()),
         ("recursive", "true".to_string()),
         ("limit", limit.to_string()),
         ("includeItemTypes", "Series".to_string()),
+        ("filters", "IsFavorite".to_string()),
         ("sortBy", "SortName".to_string()),
         ("sortOrder", "Ascending".to_string()),
         ("fields", item_fields()),
+        ("enableUserData", "true".to_string()),
     ];
     let items = get_items_raw(client, server, "Users/{user_id}/Items", &emby_params)
         .or_else(|_| get_items_raw(client, server, "Items", &jellyfin_params))?;
@@ -654,7 +659,7 @@ pub(crate) fn search_items(
 
 pub(crate) fn tmdb_tv_details(
     client: &Client,
-    access_token: &str,
+    api_key: &str,
     tmdb_id: i64,
     language: &str,
 ) -> Result<TmdbTvDetails, String> {
@@ -663,10 +668,10 @@ pub(crate) fn tmdb_tv_details(
         .map_err(|err| format!("Invalid TMDB URL: {err}"))?;
     url.query_pairs_mut()
         .append_pair("language", language)
+        .append_pair("api_key", api_key)
         .append_pair("append_to_response", "external_ids");
     let response = client
         .get(url)
-        .bearer_auth(access_token)
         .send()
         .map_err(|err| format!("TMDB request failed: {err}"))?;
     read_json(response, "TMDB TV details")

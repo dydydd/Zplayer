@@ -65,7 +65,7 @@ export type AppSettings = {
   diagnosticsEnabled?: boolean;
   autoplayNextEpisode?: boolean;
   language?: AppLanguage;
-  tmdbAccessToken?: string | null;
+  tmdbApiKey?: string | null;
 };
 
 export type LinuxWindowDiagnostics = {
@@ -104,7 +104,7 @@ export type ResolvedAppSettings = {
   diagnosticsEnabled: boolean;
   autoplayNextEpisode: boolean;
   language: AppLanguage;
-  tmdbAccessToken: string;
+  tmdbApiKey: string;
 };
 
 export const defaultAppSettings: ResolvedAppSettings = {
@@ -119,7 +119,7 @@ export const defaultAppSettings: ResolvedAppSettings = {
   diagnosticsEnabled: false,
   autoplayNextEpisode: true,
   language: "auto",
-  tmdbAccessToken: "",
+  tmdbApiKey: "",
 };
 
 export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedAppSettings {
@@ -137,7 +137,7 @@ export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedApp
     diagnosticsEnabled: settings.diagnosticsEnabled ?? defaultAppSettings.diagnosticsEnabled,
     autoplayNextEpisode: settings.autoplayNextEpisode ?? defaultAppSettings.autoplayNextEpisode,
     language: normalizeLanguage(settings.language),
-    tmdbAccessToken: settings.tmdbAccessToken ?? "",
+    tmdbApiKey: settings.tmdbApiKey ?? "",
   };
 }
 
