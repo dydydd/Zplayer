@@ -182,6 +182,20 @@ export function SettingsView({
           <Toggle label={t("settings.memoryCache")} checked={draft.metadataCacheEnabled} onChange={(checked) => update("metadataCacheEnabled", checked)} />
         </SettingsPanel>
 
+        <SettingsPanel title={t("settings.tmdbTitle")} note={t("settings.tmdbNote")}>
+          <label className="settings-field">
+            {t("settings.tmdbToken")}
+            <input
+              className="settings-path-input"
+              type="password"
+              value={draft.tmdbAccessToken}
+              onChange={(event) => update("tmdbAccessToken", event.target.value)}
+              placeholder={t("settings.tmdbTokenPlaceholder")}
+              autoComplete="off"
+            />
+          </label>
+        </SettingsPanel>
+
         <SettingsPanel title={t("settings.themeTitle")} note={t("settings.themeNote")}>
           <SegmentedControl
             label={t("settings.themeTitle")}

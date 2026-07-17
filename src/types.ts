@@ -5,6 +5,7 @@ export type View =
   | { name: "servers" }
   | { name: "settings" }
   | { name: "home" }
+  | { name: "calendar" }
   | { name: "library"; id: string; title?: string; itemType?: LibraryItemType; sortBy?: LibrarySortBy; sortOrder?: LibrarySortOrder; filters?: LibraryFilters }
   | { name: "detail"; id: string; serverId?: string | null }
   | {
@@ -64,6 +65,7 @@ export type AppSettings = {
   diagnosticsEnabled?: boolean;
   autoplayNextEpisode?: boolean;
   language?: AppLanguage;
+  tmdbAccessToken?: string | null;
 };
 
 export type LinuxWindowDiagnostics = {
@@ -102,6 +104,7 @@ export type ResolvedAppSettings = {
   diagnosticsEnabled: boolean;
   autoplayNextEpisode: boolean;
   language: AppLanguage;
+  tmdbAccessToken: string;
 };
 
 export const defaultAppSettings: ResolvedAppSettings = {
@@ -116,6 +119,7 @@ export const defaultAppSettings: ResolvedAppSettings = {
   diagnosticsEnabled: false,
   autoplayNextEpisode: true,
   language: "auto",
+  tmdbAccessToken: "",
 };
 
 export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedAppSettings {
@@ -133,6 +137,7 @@ export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedApp
     diagnosticsEnabled: settings.diagnosticsEnabled ?? defaultAppSettings.diagnosticsEnabled,
     autoplayNextEpisode: settings.autoplayNextEpisode ?? defaultAppSettings.autoplayNextEpisode,
     language: normalizeLanguage(settings.language),
+    tmdbAccessToken: settings.tmdbAccessToken ?? "",
   };
 }
 
@@ -203,6 +208,35 @@ export type HomeMorePayload = {
   resumeItems: MediaItem[];
   favoriteItems: MediaItem[];
   recentItems: MediaItem[];
+};
+
+export type WatchCalendarPayload = {
+  server: SavedServer;
+  tmdbConfigured: boolean;
+  seriesScanned: number;
+  seriesWithTmdbId: number;
+  days: WatchCalendarDay[];
+};
+
+export type WatchCalendarDay = {
+  date: string;
+  episodes: WatchCalendarEpisode[];
+};
+
+export type WatchCalendarEpisode = {
+  id: string;
+  serverSeriesId: string;
+  tmdbSeriesId: number;
+  seriesName: string;
+  episodeName: string;
+  overview?: string | null;
+  airDate: string;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
+  stillUrl?: string | null;
+  posterUrl?: string | null;
+  backdropUrl?: string | null;
+  voteAverage?: number | null;
 };
 
 export type SearchPayload = {

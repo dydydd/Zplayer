@@ -43,6 +43,7 @@ pub fn run() {
             commands::delete_server,
             commands::load_home,
             commands::load_home_more,
+            commands::load_watch_calendar,
             commands::load_library,
             commands::load_item,
             commands::load_item_more,

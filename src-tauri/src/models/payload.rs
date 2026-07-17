@@ -31,6 +31,41 @@ pub(crate) struct HomeMorePayload {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarPayload {
+    pub(crate) server: SavedServerSummary,
+    pub(crate) tmdb_configured: bool,
+    pub(crate) series_scanned: usize,
+    pub(crate) series_with_tmdb_id: usize,
+    pub(crate) days: Vec<WatchCalendarDay>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarDay {
+    pub(crate) date: String,
+    pub(crate) episodes: Vec<WatchCalendarEpisode>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarEpisode {
+    pub(crate) id: String,
+    pub(crate) server_series_id: String,
+    pub(crate) tmdb_series_id: i64,
+    pub(crate) series_name: String,
+    pub(crate) episode_name: String,
+    pub(crate) overview: Option<String>,
+    pub(crate) air_date: String,
+    pub(crate) season_number: Option<i64>,
+    pub(crate) episode_number: Option<i64>,
+    pub(crate) still_url: Option<String>,
+    pub(crate) poster_url: Option<String>,
+    pub(crate) backdrop_url: Option<String>,
+    pub(crate) vote_average: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SearchPayload {
     pub(crate) items: Vec<MediaItem>,
 }

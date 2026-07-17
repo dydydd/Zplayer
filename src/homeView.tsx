@@ -31,6 +31,7 @@ export function HomeView({
   onAddServer,
   onOpenServers,
   onOpenSettings,
+  onOpenCalendar,
   onOpenFavorites,
   onActivateServer,
   onOpenLibrary,
@@ -46,6 +47,7 @@ export function HomeView({
   onAddServer: () => void;
   onOpenServers: () => void;
   onOpenSettings: () => void;
+  onOpenCalendar: () => void;
   onOpenFavorites: () => void;
   onActivateServer: (id: string) => Promise<void>;
   onOpenLibrary: (id: string) => void;
@@ -183,6 +185,10 @@ export function HomeView({
               setServerMenuOpen(false);
               onOpenServers();
             }}>{t("home.serverManage")}</button>
+            <button onClick={() => {
+              setServerMenuOpen(false);
+              onOpenCalendar();
+            }}>{t("home.calendar")}</button>
             <button onClick={() => {
               setServerMenuOpen(false);
               onOpenFavorites();

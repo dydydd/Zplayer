@@ -7,11 +7,13 @@ use crate::models::{
     PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
     ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
     SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
-    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput, ServerImportResult,
+    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput, ServerImportResult, TmdbEpisode,
+    WatchCalendarDay, WatchCalendarEpisode, WatchCalendarPayload,
 };
 use crate::mpv;
 use crate::platform_window::{self, LinuxWindowDiagnostics};
 use crate::store;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +21,9 @@ use tauri::AppHandle;
 
 const HOME_FIRST_LOAD_TIMEOUT: Duration = Duration::from_secs(8);
 const HOME_MORE_TIMEOUT: Duration = Duration::from_secs(12);
+const WATCH_CALENDAR_SERIES_LIMIT: usize = 80;
+const WATCH_CALENDAR_TMDB_CONCURRENCY: usize = 8;
+const WATCH_CALENDAR_TMDB_TIMEOUT: Duration = Duration::from_secs(12);
 
 fn server_for_input(app: &AppHandle, server_id: Option<&str>) -> Result<SavedServer, String> {
     match server_id.filter(|value| !value.trim().is_empty()) {
@@ -284,6 +289,186 @@ fn load_home_more_sync(app: AppHandle) -> Result<HomeMorePayload, String> {
         favorite_items,
         recent_items,
     })
+}
+
+#[tauri::command]
+pub(crate) async fn load_watch_calendar(app: AppHandle) -> Result<WatchCalendarPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || load_watch_calendar_sync(app))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_watch_calendar_sync(app: AppHandle) -> Result<WatchCalendarPayload, String> {
+    let server = store::active_server(&app)?;
+    let settings = store::settings(&app)?;
+    let Some(access_token) = settings
+        .tmdb_access_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    else {
+        return Ok(WatchCalendarPayload {
+            server: store::server_summary(&server),
+            tmdb_configured: false,
+            series_scanned: 0,
+            series_with_tmdb_id: 0,
+            days: Vec::new(),
+        });
+    };
+
+    let server_client = api::http_client_with_timeout(server.use_system_proxy, HOME_MORE_TIMEOUT)?;
+    let (series, series_scanned) = api::get_tracked_series_with_tmdb_ids(
+        &server_client,
+        &server,
+        WATCH_CALENDAR_SERIES_LIMIT,
+    )?;
+    let tmdb_client = api::http_client_with_timeout(true, WATCH_CALENDAR_TMDB_TIMEOUT)?;
+    let language = tmdb_language(&settings.language);
+    let mut episodes = Vec::new();
+    let mut errors = Vec::new();
+
+    for chunk in series.chunks(WATCH_CALENDAR_TMDB_CONCURRENCY) {
+        let results = thread::scope(|scope| {
+            chunk
+                .iter()
+                .map(|series| {
+                    let client = &tmdb_client;
+                    scope.spawn(move || {
+                        let detail =
+                            api::tmdb_tv_details(client, access_token, series.tmdb_id, language)?;
+                        Ok::<_, String>((series, detail))
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| {
+                    handle
+                        .join()
+                        .map_err(|_| "TMDB calendar worker failed.".to_string())?
+                })
+                .collect::<Vec<_>>()
+        });
+
+        for result in results {
+            match result {
+                Ok((series, detail)) => {
+                    let series_name = detail.name.as_deref().unwrap_or(&series.name);
+                    let poster_url = api::tmdb_image_url(detail.poster_path.as_deref(), "w342");
+                    let backdrop_url = api::tmdb_image_url(detail.backdrop_path.as_deref(), "w780");
+                    if let Some(episode) = watch_calendar_episode_from_tmdb(
+                        &series.server_series_id,
+                        detail.id,
+                        series_name,
+                        detail.next_episode_to_air.as_ref(),
+                        poster_url.as_deref(),
+                        backdrop_url.as_deref(),
+                    ) {
+                        episodes.push(episode);
+                    }
+                    if let Some(episode) = watch_calendar_episode_from_tmdb(
+                        &series.server_series_id,
+                        detail.id,
+                        series_name,
+                        detail.last_episode_to_air.as_ref(),
+                        poster_url.as_deref(),
+                        backdrop_url.as_deref(),
+                    ) {
+                        episodes.push(episode);
+                    }
+                }
+                Err(err) => errors.push(err),
+            }
+        }
+    }
+
+    if episodes.is_empty() && !series.is_empty() && errors.len() == series.len() {
+        return Err(errors
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "Failed to load TMDB calendar.".to_string()));
+    }
+
+    Ok(WatchCalendarPayload {
+        server: store::server_summary(&server),
+        tmdb_configured: true,
+        series_scanned,
+        series_with_tmdb_id: series.len(),
+        days: build_watch_calendar_days(episodes),
+    })
+}
+
+fn watch_calendar_episode_from_tmdb(
+    server_series_id: &str,
+    tmdb_series_id: i64,
+    series_name: &str,
+    episode: Option<&TmdbEpisode>,
+    poster_url: Option<&str>,
+    backdrop_url: Option<&str>,
+) -> Option<WatchCalendarEpisode> {
+    let episode = episode?;
+    let air_date = episode.air_date.as_deref()?.trim();
+    if air_date.is_empty() {
+        return None;
+    }
+    let still_url = api::tmdb_image_url(episode.still_path.as_deref(), "w500");
+    Some(WatchCalendarEpisode {
+        id: format!(
+            "{tmdb_series_id}:{}:{}:{}",
+            episode.season_number.unwrap_or_default(),
+            episode.episode_number.unwrap_or_default(),
+            episode.id
+        ),
+        server_series_id: server_series_id.to_string(),
+        tmdb_series_id,
+        series_name: series_name.to_string(),
+        episode_name: episode
+            .name
+            .clone()
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| "Episode".to_string()),
+        overview: episode
+            .overview
+            .clone()
+            .filter(|overview| !overview.trim().is_empty()),
+        air_date: air_date.to_string(),
+        season_number: episode.season_number,
+        episode_number: episode.episode_number,
+        still_url,
+        poster_url: poster_url.map(str::to_string),
+        backdrop_url: backdrop_url.map(str::to_string),
+        vote_average: episode.vote_average,
+    })
+}
+
+fn build_watch_calendar_days(episodes: Vec<WatchCalendarEpisode>) -> Vec<WatchCalendarDay> {
+    let mut seen = HashSet::new();
+    let mut days = BTreeMap::<String, Vec<WatchCalendarEpisode>>::new();
+    for episode in episodes {
+        if !seen.insert(episode.id.clone()) {
+            continue;
+        }
+        days.entry(episode.air_date.clone())
+            .or_default()
+            .push(episode);
+    }
+    days.into_iter()
+        .map(|(date, mut episodes)| {
+            episodes.sort_by(|left, right| {
+                left.series_name
+                    .cmp(&right.series_name)
+                    .then_with(|| left.season_number.cmp(&right.season_number))
+                    .then_with(|| left.episode_number.cmp(&right.episode_number))
+            });
+            WatchCalendarDay { date, episodes }
+        })
+        .collect()
+}
+
+fn tmdb_language(language: &str) -> &'static str {
+    match language {
+        "en-US" => "en-US",
+        _ => "zh-CN",
+    }
 }
 
 fn load_library_latest(
@@ -1042,4 +1227,52 @@ fn normalize_library_sort(
         _ => "Descending",
     };
     (sort_by, sort_order)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn calendar_episode(id: &str, date: &str, series_name: &str) -> WatchCalendarEpisode {
+        WatchCalendarEpisode {
+            id: id.to_string(),
+            server_series_id: format!("server-{series_name}"),
+            tmdb_series_id: 1,
+            series_name: series_name.to_string(),
+            episode_name: "Episode".to_string(),
+            overview: None,
+            air_date: date.to_string(),
+            season_number: Some(1),
+            episode_number: Some(1),
+            still_url: None,
+            poster_url: None,
+            backdrop_url: None,
+            vote_average: None,
+        }
+    }
+
+    #[test]
+    fn watch_calendar_days_sort_and_dedupe_episodes() {
+        let days = build_watch_calendar_days(vec![
+            calendar_episode("2", "2026-07-19", "Beta"),
+            calendar_episode("1", "2026-07-18", "Zulu"),
+            calendar_episode("1", "2026-07-18", "Zulu"),
+            calendar_episode("3", "2026-07-18", "Alpha"),
+        ]);
+
+        assert_eq!(
+            days.iter().map(|day| day.date.as_str()).collect::<Vec<_>>(),
+            vec!["2026-07-18", "2026-07-19",]
+        );
+        assert_eq!(days[0].episodes.len(), 2);
+        assert_eq!(days[0].episodes[0].series_name, "Alpha");
+        assert_eq!(days[0].episodes[1].series_name, "Zulu");
+    }
+
+    #[test]
+    fn tmdb_language_defaults_to_chinese() {
+        assert_eq!(tmdb_language("en-US"), "en-US");
+        assert_eq!(tmdb_language("auto"), "zh-CN");
+        assert_eq!(tmdb_language("zh-CN"), "zh-CN");
+    }
 }

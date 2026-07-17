@@ -9,8 +9,8 @@ import { ipc } from "./ipc";
 import { applyLanguage } from "./i18n";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
-import { DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
-import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View } from "./types";
+import { CalendarView, DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
+import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View, WatchCalendarPayload } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
 import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, preferencePayload, preferredStreamIndex, relativeEpisodeId, scopedPlaybackPreferenceKey } from "./appLogic";
 import "./App.css";
@@ -200,6 +200,7 @@ function App() {
   const [servers, setServers] = useState<SavedServer[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
   const [home, setHome] = useState<HomePayload | null>(null);
+  const [calendar, setCalendar] = useState<WatchCalendarPayload | null>(null);
   const [library, setLibrary] = useState<LibraryPayload | null>(null);
   const [libraryLoadingMore, setLibraryLoadingMore] = useState(false);
   const [detail, setDetail] = useState<ItemDetailPayload | null>(null);
@@ -384,6 +385,9 @@ function App() {
     if (view.name === "home") {
       void loadHome();
     }
+    if (view.name === "calendar") {
+      void loadWatchCalendar();
+    }
     if (view.name === "library") {
       void loadLibrary(view.id, view.itemType ?? "", view.sortBy ?? "DateCreated", view.sortOrder ?? "Descending", view.filters ?? {});
     }
@@ -560,6 +564,10 @@ function App() {
     const result = await run(t("common.save"), () => ipc.saveSettings(withAppSettingsDefaults(next)));
     if (result) {
       setSettings(result);
+      if (viewRef.current.name === "calendar") {
+        setCalendar(null);
+        void loadWatchCalendar();
+      }
     }
   }
 
@@ -675,6 +683,14 @@ function App() {
       });
     } catch {
       // ponytail: non-critical shelves can stay empty; surface only the first-screen failure.
+    }
+  }
+
+  async function loadWatchCalendar() {
+    const currentRequest = ++requestId.current;
+    const result = await run(t("loading.calendar"), () => ipc.loadWatchCalendar());
+    if (result && currentRequest === requestId.current) {
+      setCalendar(result);
     }
   }
 
@@ -838,6 +854,7 @@ function App() {
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
+      setCalendar(null);
       setLibrary(null);
       setDetail(null);
       await refreshServers();
@@ -856,6 +873,7 @@ function App() {
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
+      setCalendar(null);
       setLibrary(null);
       setDetail(null);
       replaceView({ name: "home" });
@@ -871,6 +889,7 @@ function App() {
       detailCache.current.clear();
       libraryCache.current.clear();
       setHome(null);
+      setCalendar(null);
       setLibrary(null);
       setDetail(null);
       await refreshServers();
@@ -891,6 +910,7 @@ function App() {
         detailCache.current.clear();
         libraryCache.current.clear();
         setHome(null);
+        setCalendar(null);
         setLibrary(null);
         setDetail(null);
         await refreshServers();
@@ -1176,6 +1196,7 @@ function App() {
 
   const openServers = useCallback(() => openView({ name: "servers" }), [openView]);
   const openSettings = useCallback(() => openView({ name: "settings" }), [openView]);
+  const openCalendar = useCallback(() => openView({ name: "calendar" }), [openView]);
   const openLibrary = useCallback((id: string) => openView({ name: "library", id }), [openView]);
   const openFavorites = useCallback(() => {
     setLibrary(null);
@@ -1298,6 +1319,14 @@ function App() {
             onSaveSettings={saveSettings}
           />
         )}
+        {showContent && view.name === "calendar" && (
+          <CalendarView
+            payload={calendar}
+            onBack={goBack}
+            onOpenSettings={openSettings}
+            onOpenSeries={openDetail}
+          />
+        )}
         {showContent && view.name === "home" && (
           <HomeView
             home={home}
@@ -1306,6 +1335,7 @@ function App() {
             onAddServer={() => setModalOpen(true)}
             onOpenServers={openServers}
             onOpenSettings={openSettings}
+            onOpenCalendar={openCalendar}
             onOpenFavorites={openFavorites}
             onActivateServer={activateServer}
             onOpenLibrary={openLibrary}

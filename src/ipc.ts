@@ -21,6 +21,7 @@ import type {
   ServerImportResult,
   SearchPayload,
   ServerForm,
+  WatchCalendarPayload,
 } from "./types";
 
 export const ipc = {
@@ -32,6 +33,7 @@ export const ipc = {
   saveSettings: (input: AppSettings) => invoke<AppSettings>("save_settings", { input }),
   loadHome: () => invoke<HomePayload>("load_home"),
   loadHomeMore: () => invoke<HomeMorePayload>("load_home_more"),
+  loadWatchCalendar: () => invoke<WatchCalendarPayload>("load_watch_calendar"),
   loadLibrary: (
     libraryId: string,
     startIndex: number,

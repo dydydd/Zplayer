@@ -17,11 +17,14 @@ pub(crate) use self::mapping::{map_item, people};
 use crate::models::{
     ApiItem, AuthResponse, ItemCounts, ItemsResponse, MediaArt, MediaItem, MediaLibrary,
     MediaSource, MediaStream, MediaVersion, PlaybackInfo, PublicSystemInfo,
-    RecommendationsResponse, SavedServer, SearchHintResult,
+    RecommendationsResponse, SavedServer, SearchHintResult, TmdbTvDetails,
 };
 use reqwest::blocking::Client;
 use reqwest::Url;
 use std::{thread, time::Duration};
+
+const TMDB_API_ROOT: &str = "https://api.themoviedb.org/3";
+const TMDB_IMAGE_ROOT: &str = "https://image.tmdb.org/t/p";
 
 pub(crate) fn authenticate_by_name(
     client: &Client,
@@ -179,6 +182,13 @@ pub(crate) struct LibraryItemsQuery<'a> {
     pub(crate) filters: &'a LibraryQueryFilters,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct TrackedSeries {
+    pub(crate) server_series_id: String,
+    pub(crate) name: String,
+    pub(crate) tmdb_id: i64,
+}
+
 #[derive(Clone, Copy)]
 enum LibraryParamStyle {
     Emby,
@@ -282,6 +292,45 @@ pub(crate) fn get_library_items(
     );
     get_items_page(client, server, "Users/{user_id}/Items", &emby_params)
         .or_else(|_| get_items_page(client, server, "Items", &jellyfin_params))
+}
+
+pub(crate) fn get_tracked_series_with_tmdb_ids(
+    client: &Client,
+    server: &SavedServer,
+    limit: usize,
+) -> Result<(Vec<TrackedSeries>, usize), String> {
+    let emby_params = vec![
+        ("Recursive", "true".to_string()),
+        ("Limit", limit.to_string()),
+        ("IncludeItemTypes", "Series".to_string()),
+        ("SortBy", "SortName".to_string()),
+        ("SortOrder", "Ascending".to_string()),
+        ("Fields", item_fields()),
+    ];
+    let jellyfin_params = vec![
+        ("userId", server.user_id.clone()),
+        ("recursive", "true".to_string()),
+        ("limit", limit.to_string()),
+        ("includeItemTypes", "Series".to_string()),
+        ("sortBy", "SortName".to_string()),
+        ("sortOrder", "Ascending".to_string()),
+        ("fields", item_fields()),
+    ];
+    let items = get_items_raw(client, server, "Users/{user_id}/Items", &emby_params)
+        .or_else(|_| get_items_raw(client, server, "Items", &jellyfin_params))?;
+    let total = items.len();
+    let tracked = items
+        .into_iter()
+        .filter_map(|item| {
+            let tmdb_id = tmdb_id_from_provider_ids(&item.provider_ids)?;
+            Some(TrackedSeries {
+                server_series_id: item.id,
+                name: item.name.unwrap_or_else(|| "Untitled".to_string()),
+                tmdb_id,
+            })
+        })
+        .collect();
+    Ok((tracked, total))
 }
 
 pub(crate) fn get_item_children(
@@ -601,6 +650,53 @@ pub(crate) fn search_items(
         .into_iter()
         .filter_map(|hint| map_search_hint(server, hint))
         .collect())
+}
+
+pub(crate) fn tmdb_tv_details(
+    client: &Client,
+    access_token: &str,
+    tmdb_id: i64,
+    language: &str,
+) -> Result<TmdbTvDetails, String> {
+    let mut url = Url::parse(TMDB_API_ROOT)
+        .and_then(|url| url.join(&format!("tv/{tmdb_id}")))
+        .map_err(|err| format!("Invalid TMDB URL: {err}"))?;
+    url.query_pairs_mut()
+        .append_pair("language", language)
+        .append_pair("append_to_response", "external_ids");
+    let response = client
+        .get(url)
+        .bearer_auth(access_token)
+        .send()
+        .map_err(|err| format!("TMDB request failed: {err}"))?;
+    read_json(response, "TMDB TV details")
+}
+
+pub(crate) fn tmdb_image_url(path: Option<&str>, size: &str) -> Option<String> {
+    let path = path?.trim();
+    if path.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}/{}/{}",
+        TMDB_IMAGE_ROOT,
+        size.trim_matches('/'),
+        path.trim_start_matches('/')
+    ))
+}
+
+fn tmdb_id_from_provider_ids(
+    provider_ids: &std::collections::HashMap<String, String>,
+) -> Option<i64> {
+    provider_ids
+        .iter()
+        .find(|(key, _)| {
+            matches!(
+                key.to_ascii_lowercase().as_str(),
+                "tmdb" | "tmdbid" | "themoviedb"
+            )
+        })
+        .and_then(|(_, value)| value.parse::<i64>().ok())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1164,6 +1260,7 @@ pub(crate) fn item_fields() -> String {
         "Tags",
         "OfficialRating",
         "MediaSources",
+        "ProviderIds",
     ]
     .join(",")
 }

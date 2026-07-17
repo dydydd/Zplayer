@@ -123,6 +123,8 @@ pub(crate) struct AppSettings {
     pub(crate) autoplay_next_episode: bool,
     #[serde(default = "default_language")]
     pub(crate) language: String,
+    #[serde(default)]
+    pub(crate) tmdb_access_token: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -139,6 +141,7 @@ impl Default for AppSettings {
             diagnostics_enabled: false,
             autoplay_next_episode: default_true(),
             language: default_language(),
+            tmdb_access_token: None,
         }
     }
 }
@@ -157,6 +160,7 @@ pub(crate) struct SaveSettingsInput {
     pub(crate) diagnostics_enabled: Option<bool>,
     pub(crate) autoplay_next_episode: Option<bool>,
     pub(crate) language: Option<String>,
+    pub(crate) tmdb_access_token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -241,5 +245,9 @@ pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
             Some("en-US") => "en-US".to_string(),
             _ => default_language(),
         },
+        tmdb_access_token: input
+            .tmdb_access_token
+            .map(|token| token.trim().to_string())
+            .filter(|token| !token.is_empty()),
     }
 }

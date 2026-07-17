@@ -129,6 +129,31 @@ pub(crate) struct ApiItem {
     pub(crate) media_sources: Vec<MediaSource>,
     pub(crate) people: Vec<ApiPerson>,
     pub(crate) screenshot_image_tags: Vec<String>,
+    pub(crate) provider_ids: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub(crate) struct TmdbTvDetails {
+    pub(crate) id: i64,
+    pub(crate) name: Option<String>,
+    pub(crate) poster_path: Option<String>,
+    pub(crate) backdrop_path: Option<String>,
+    pub(crate) next_episode_to_air: Option<TmdbEpisode>,
+    pub(crate) last_episode_to_air: Option<TmdbEpisode>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub(crate) struct TmdbEpisode {
+    pub(crate) id: i64,
+    pub(crate) name: Option<String>,
+    pub(crate) overview: Option<String>,
+    pub(crate) air_date: Option<String>,
+    pub(crate) episode_number: Option<i64>,
+    pub(crate) season_number: Option<i64>,
+    pub(crate) still_path: Option<String>,
+    pub(crate) vote_average: Option<f64>,
 }
 
 #[derive(Debug, Deserialize, Default)]

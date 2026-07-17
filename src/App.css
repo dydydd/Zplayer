@@ -1,6 +1,7 @@
 ﻿@import "./styles/base.css";
 @import "./styles/server-settings.css";
 @import "./styles/home.css";
+@import "./styles/calendar.css";
 @import "./styles/library-search.css";
 @import "./styles/player-detail.css";
 @import "./styles/modal.css";
