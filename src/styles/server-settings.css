@@ -871,6 +871,12 @@ h2 {
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
 }
 
+.server-page .server-card.reachable .server-status-dot {
+  background: #31d07a;
+  box-shadow: 0 0 0 4px rgba(49, 208, 122, 0.1), 0 0 16px rgba(49, 208, 122, 0.42);
+  animation: server-status-breathe 2.4s ease-in-out infinite;
+}
+
 .server-page .server-main {
   display: grid;
   min-width: 0;
@@ -976,4 +982,23 @@ h2 {
   font-weight: 950;
   text-align: center;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+@keyframes server-status-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(49, 208, 122, 0.08), 0 0 12px rgba(49, 208, 122, 0.28);
+    opacity: 0.82;
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(49, 208, 122, 0.16), 0 0 20px rgba(49, 208, 122, 0.56);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .server-page .server-card.reachable .server-status-dot {
+    animation: none;
+  }
 }

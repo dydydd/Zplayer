@@ -867,7 +867,14 @@ function App() {
     );
     if (result) {
       setServers((current) => current.map((server) => (
-        server.id === result.id ? { ...server, ...result, active: true } : { ...server, active: false }
+        server.id === result.id ? {
+          ...server,
+          ...result,
+          active: true,
+          movieCount: result.movieCount ?? server.movieCount,
+          seriesCount: result.seriesCount ?? server.seriesCount,
+          episodeCount: result.episodeCount ?? server.episodeCount,
+        } : { ...server, active: false }
       )));
       clearHomeMetadataCaches();
       detailCache.current.clear();

@@ -50,7 +50,7 @@ export function ServerView({
           {sortedServers.map((server) => (
             <article
               key={server.id}
-              className={`server-card ${server.active ? "active" : ""}`}
+              className={`server-card ${server.active ? "active" : ""} ${serverReachable(server) ? "reachable" : ""}`}
               role="button"
               tabIndex={0}
               onClick={() => void onActivate(server.id)}
@@ -111,6 +111,10 @@ function serverInitials(name: string) {
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length > 1) return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   return clean.slice(0, 2).toUpperCase();
+}
+
+function serverReachable(server: SavedServer) {
+  return [server.movieCount, server.seriesCount, server.episodeCount].some((count) => typeof count === "number");
 }
 
 export function SettingsView({
