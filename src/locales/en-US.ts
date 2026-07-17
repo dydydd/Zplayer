@@ -79,7 +79,6 @@ export const enUS = {
     importDialogTitle: "Import server info",
     exportDialogTitle: "Export server info",
     exportNote: "The exported JSON includes login tokens. Keep it private.",
-    mainRoute: "Primary route",
     today: "Today",
     unwatched: "Unwatched",
     movies: "Movies",

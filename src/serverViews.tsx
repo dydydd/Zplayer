@@ -95,10 +95,6 @@ export function ServerView({
                   <span>{t("server.series")} <strong>{server.seriesCount ?? "-"}</strong></span>
                   <span>{t("server.episodes")} <strong>{server.episodeCount ?? "-"}</strong></span>
                 </div>
-                <div className="server-route-row">
-                  <span className="server-route-label">{t("server.mainRoute")}</span>
-                  <span className="server-route-action" aria-hidden="true">↔</span>
-                </div>
               </div>
               <span className="server-watch-badge">{server.active ? t("server.today") : t("server.unwatched")}</span>
             </article>

@@ -952,38 +952,6 @@ h2 {
   font-weight: 950;
 }
 
-.server-route-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 12px;
-}
-
-.server-route-label {
-  display: block;
-  min-width: 0;
-  height: 34px;
-  padding: 7px 14px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 14px;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.server-route-action {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 18px;
-  font-weight: 950;
-}
-
 .server-watch-badge {
   position: absolute;
   bottom: 10px;

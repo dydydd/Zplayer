@@ -77,7 +77,6 @@ export const zhCN = {
     importDialogTitle: "导入服务器信息",
     exportDialogTitle: "导出服务器信息",
     exportNote: "导出的 JSON 包含登录令牌，请妥善保管。",
-    mainRoute: "主线路",
     today: "今天",
     unwatched: "未观看",
     movies: "电影",
