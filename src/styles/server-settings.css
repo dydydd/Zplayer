@@ -879,7 +879,7 @@ h2 {
 
 .server-page .server-card-title {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
   align-items: center;
   gap: 8px;
 }
@@ -893,27 +893,36 @@ h2 {
 
 .server-card-icon {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border-radius: 999px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    background 0.16s var(--tv-ease),
+    border-color 0.16s var(--tv-ease),
+    color 0.16s var(--tv-ease),
+    opacity 0.16s var(--tv-ease);
 }
 
 .server-card-icon .ui-icon {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .server-card-icon:hover,
 .server-card-icon:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
 .server-card-icon.danger {
-  opacity: 0;
-  transition: opacity 0.16s var(--tv-ease), background 0.16s var(--tv-ease);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.58);
+  opacity: 0.62;
 }
 
 .server-card:hover .server-card-icon.danger,
@@ -923,7 +932,9 @@ h2 {
 
 .server-card-icon.danger:hover,
 .server-card-icon.danger:focus-visible {
+  border-color: rgba(255, 90, 90, 0.34);
   background: rgba(255, 90, 90, 0.32);
+  color: #fff;
 }
 
 .server-page .server-counts {
