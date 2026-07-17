@@ -216,10 +216,10 @@ html.playing-embedded .app::before {
 .drag-strip {
   position: fixed;
   top: 0;
-  right: 0;
-  left: 0;
+  right: calc(var(--page-pad) + 220px);
+  left: calc(var(--page-pad) + min(520px, 48vw));
   z-index: 25;
-  height: 120px;
+  height: calc(var(--chrome-top) + var(--chrome-control));
 }
 
 html.playing-embedded .drag-strip {
