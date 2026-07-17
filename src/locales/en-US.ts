@@ -71,6 +71,7 @@ export const enUS = {
   server: {
     eyebrow: "Connections",
     title: "Media Servers",
+    manageTitle: "Server Management",
     subtitle: "Manage Emby / Jellyfin connections and media summaries.",
     add: "Add server",
     import: "Import JSON",
@@ -78,8 +79,15 @@ export const enUS = {
     importDialogTitle: "Import server info",
     exportDialogTitle: "Export server info",
     exportNote: "The exported JSON includes login tokens. Keep it private.",
+    searchPlaceholder: "Search",
+    needsAccount: "Needs keep-alive",
+    sort: "Sort",
+    mainRoute: "Primary route",
+    today: "Today",
+    unwatched: "Unwatched",
     movies: "Movies",
     series: "Series",
+    episodes: "Episodes",
   },
   settings: {
     eyebrow: "Advanced",

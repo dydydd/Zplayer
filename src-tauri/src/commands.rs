@@ -131,6 +131,7 @@ fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> 
         if let Some((_, counts)) = counts.iter().find(|(id, _)| *id == summary.id) {
             summary.movie_count = counts.movie_count;
             summary.series_count = counts.series_count;
+            summary.episode_count = counts.episode_count;
         }
     }
     Ok(summaries)

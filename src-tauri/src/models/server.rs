@@ -51,6 +51,7 @@ pub(crate) struct SavedServerSummary {
     pub(crate) use_system_proxy: bool,
     pub(crate) movie_count: Option<i64>,
     pub(crate) series_count: Option<i64>,
+    pub(crate) episode_count: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -58,6 +59,7 @@ pub(crate) struct SavedServerSummary {
 pub(crate) struct ItemCounts {
     pub(crate) movie_count: Option<i64>,
     pub(crate) series_count: Option<i64>,
+    pub(crate) episode_count: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

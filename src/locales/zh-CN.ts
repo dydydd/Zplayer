@@ -69,6 +69,7 @@ export const zhCN = {
   server: {
     eyebrow: "连接中心",
     title: "媒体服务器",
+    manageTitle: "服务器管理",
     subtitle: "管理 Emby / Jellyfin 连接和媒体概览。",
     add: "添加服务器",
     import: "导入 JSON",
@@ -76,8 +77,15 @@ export const zhCN = {
     importDialogTitle: "导入服务器信息",
     exportDialogTitle: "导出服务器信息",
     exportNote: "导出的 JSON 包含登录令牌，请妥善保管。",
+    searchPlaceholder: "搜索",
+    needsAccount: "需要保号",
+    sort: "排序",
+    mainRoute: "主线路",
+    today: "今天",
+    unwatched: "未观看",
     movies: "电影",
     series: "剧集",
+    episodes: "集",
   },
   settings: {
     eyebrow: "专业设置",

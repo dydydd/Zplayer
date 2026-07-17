@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { UiIcon } from "./icons";
@@ -25,83 +25,128 @@ export function ServerView({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const sortedServers = [...servers].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
+  const [query, setQuery] = useState("");
+  const [sortByActivity, setSortByActivity] = useState(true);
+  const sortedServers = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return [...servers]
+      .filter((server) => {
+        if (!normalizedQuery) return true;
+        return [server.name, server.url, server.username].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+      })
+      .sort((left, right) => {
+        if (sortByActivity) {
+          return Number(right.active) - Number(left.active) || (right.movieCount ?? 0) - (left.movieCount ?? 0) || left.name.localeCompare(right.name);
+        }
+        return left.name.localeCompare(right.name);
+      });
+  }, [query, servers, sortByActivity]);
 
   return (
     <div className="page narrow server-page">
-      <button className="back" onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
-      <div className="server-heading">
-        <div>
-          <span className="eyebrow">{t("server.eyebrow")}</span>
-          <h1>{t("server.title")}</h1>
-          <p>{t("server.subtitle")}</p>
-          <p className="server-export-note">{t("server.exportNote")}</p>
+      <aside className="server-side-rail" aria-hidden="true">
+        <span className="server-rail-logo">Z</span>
+        <span className="server-rail-avatar"><UiIcon name="server" /></span>
+        <span className="server-rail-dot" />
+        <span className="server-rail-button active"><UiIcon name="server" /></span>
+        <span className="server-rail-button"><UiIcon name="heart" /></span>
+        <span className="server-rail-spacer" />
+        <span className="server-rail-button"><UiIcon name="settings" /></span>
+      </aside>
+      <div className="server-shell">
+        <div className="server-topline">
+          <button className="server-back" onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
+          <h1>{t("server.manageTitle")}</h1>
+          <div className="server-toolstrip">
+            <label className="server-search">
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("server.searchPlaceholder")} />
+              <UiIcon name="search" />
+            </label>
+            <button type="button" className="server-pill">{t("server.needsAccount")}</button>
+            <button type="button" className="server-pill" onClick={() => setSortByActivity((value) => !value)}>{t("server.sort")}</button>
+          </div>
         </div>
-        <div className="server-heading-actions">
-          <button onClick={() => void onImport()}>{t("server.import")}</button>
-          <button onClick={() => void onExport()} disabled={!servers.length}>{t("server.export")}</button>
-          <button onClick={onAdd}>{t("server.add")}</button>
+        <div className="server-heading">
+          <div>
+            <span className="eyebrow">{t("server.eyebrow")}</span>
+            <p>{t("server.subtitle")}</p>
+            <p className="server-export-note">{t("server.exportNote")}</p>
+          </div>
+          <div className="server-heading-actions">
+            <button onClick={onAdd}>{t("server.add")}</button>
+            <button onClick={() => void onImport()}>{t("server.import")}</button>
+            <button onClick={() => void onExport()} disabled={!servers.length}>{t("server.export")}</button>
+          </div>
         </div>
-      </div>
-      <div className="server-list">
-        {sortedServers.map((server) => (
-          <button
-            key={server.id}
-            className={`server-card ${server.active ? "active" : ""}`}
-            onClick={() => void onActivate(server.id)}
-          >
-            <span className="server-logo"><UiIcon name="server" /></span>
-            <div className="server-main">
-              <div className="server-card-title">
-                <h3>{server.name}</h3>
-                {server.active && <span>{t("common.current")}</span>}
+        <div className="server-list">
+          {sortedServers.map((server) => (
+            <article
+              key={server.id}
+              className={`server-card ${server.active ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => void onActivate(server.id)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                void onActivate(server.id);
+              }}
+            >
+              <span className="server-logo" aria-hidden="true">{serverInitials(server.name)}</span>
+              <span className="server-status-dot" aria-hidden="true" />
+              <div className="server-main">
+                <div className="server-card-title">
+                  <h3>{server.name}</h3>
+                  <button
+                    type="button"
+                    className="server-card-icon"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEdit(server);
+                    }}
+                    title={t("common.edit")}
+                    aria-label={t("common.edit")}
+                  >
+                    <UiIcon name="settings" />
+                  </button>
+                  <button
+                    type="button"
+                    className="server-card-icon danger"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onDelete(server.id);
+                    }}
+                    title={t("common.delete")}
+                    aria-label={t("common.delete")}
+                  >
+                    <UiIcon name="x" />
+                  </button>
+                </div>
+                <div className="server-counts">
+                  <span>{t("server.movies")} <strong>{server.movieCount ?? "-"}</strong></span>
+                  <span>{t("server.series")} <strong>{server.seriesCount ?? "-"}</strong></span>
+                  <span>{t("server.episodes")} <strong>{server.episodeCount ?? "-"}</strong></span>
+                </div>
+                <div className="server-route-row">
+                  <span className="server-route-label">{t("server.mainRoute")}</span>
+                  <span className="server-route-action" aria-hidden="true">↔</span>
+                </div>
               </div>
-              <p>{server.url}</p>
-              <small>{server.username}</small>
-            </div>
-            <div className="server-counts">
-              <span><strong>{server.movieCount ?? "-"}</strong>{t("server.movies")}</span>
-              <span><strong>{server.seriesCount ?? "-"}</strong>{t("server.series")}</span>
-            </div>
-            <span
-              className="server-edit"
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation();
-                onEdit(server);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                event.stopPropagation();
-                onEdit(server);
-              }}
-            >
-              {t("common.edit")}
-            </span>
-            <span
-              className="server-delete"
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation();
-                void onDelete(server.id);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                event.stopPropagation();
-                void onDelete(server.id);
-              }}
-            >
-              {t("common.delete")}
-            </span>
-          </button>
-        ))}
+              <span className="server-watch-badge">{server.active ? t("server.today") : t("server.unwatched")}</span>
+            </article>
+          ))}
+        </div>
       </div>
     </div>
   );
+}
+
+function serverInitials(name: string) {
+  const clean = name.trim();
+  if (!clean) return "Z";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length > 1) return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
 }
 
 export function SettingsView({

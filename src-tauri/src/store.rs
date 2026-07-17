@@ -213,6 +213,7 @@ pub(crate) fn server_summary(server: &SavedServer) -> SavedServerSummary {
         use_system_proxy: server.use_system_proxy,
         movie_count: None,
         series_count: None,
+        episode_count: None,
     }
 }
 

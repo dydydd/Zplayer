@@ -45,6 +45,7 @@ export type SavedServer = {
   useSystemProxy: boolean;
   movieCount?: number | null;
   seriesCount?: number | null;
+  episodeCount?: number | null;
 };
 
 export type ServerImportResult = {
