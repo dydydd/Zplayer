@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { UiIcon } from "./icons";
+import { ServerAvatar } from "./ServerAvatar";
+import { useServerIconEntries } from "./serverIcons";
 import type { AppLanguage, AppSettings, LinuxWindowDiagnostics, PlayResult, SavedServer } from "./types";
 import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 
@@ -25,6 +27,7 @@ export function ServerView({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
+  const serverIcons = useServerIconEntries();
   const sortedServers = [...servers].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
 
   return (
@@ -60,7 +63,7 @@ export function ServerView({
                 void onActivate(server.id);
               }}
             >
-              <span className="server-logo" aria-hidden="true">{serverInitials(server.name)}</span>
+              <ServerAvatar server={server} icons={serverIcons} className="server-logo" />
               <span className="server-status-dot" aria-hidden="true" />
               <div className="server-main">
                 <div className="server-card-title">
@@ -103,14 +106,6 @@ export function ServerView({
       </div>
     </div>
   );
-}
-
-function serverInitials(name: string) {
-  const clean = name.trim();
-  if (!clean) return "Z";
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length > 1) return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-  return clean.slice(0, 2).toUpperCase();
 }
 
 function serverReachable(server: SavedServer) {

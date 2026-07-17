@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { UiIcon } from "./icons";
 import { bg, itemMeta } from "./media";
+import { ServerAvatar } from "./ServerAvatar";
+import { useServerIconEntries } from "./serverIcons";
 import { rotateDaily } from "./viewLogic";
 import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
 
@@ -58,6 +60,7 @@ export function HomeView({
   chromeVisible: boolean;
 }) {
   const { t } = useTranslation();
+  const serverIcons = useServerIconEntries();
   const [heroIndex, setHeroIndex] = useState(0);
   const [visibleFeaturedImage, setVisibleFeaturedImage] = useState<string | null | undefined>(undefined);
   const longPressTimer = useRef<number | null>(null);
@@ -143,7 +146,7 @@ export function HomeView({
   }
 
   if (!home) {
-    return <HomeSkeleton serverName={currentServer.name} chromeVisible={chromeVisible} />;
+    return <HomeSkeleton server={currentServer} serverIcons={serverIcons} chromeVisible={chromeVisible} />;
   }
 
   return (
@@ -160,8 +163,8 @@ export function HomeView({
           }}
           title={t("home.serverSwitchTitle")}
         >
-          <span className="home-icon"><UiIcon name="server" /></span>
-          {currentServer.name}
+          <ServerAvatar server={currentServer} icons={serverIcons} className="home-icon" />
+          <span className="home-server-name">{currentServer.name}</span>
         </button>
         {serverMenuOpen && (
           <div className="server-popover">
@@ -174,7 +177,8 @@ export function HomeView({
                   void onActivateServer(server.id);
                 }}
               >
-                {server.name}
+                <ServerAvatar server={server} icons={serverIcons} className="server-popover-icon" />
+                <span>{server.name}</span>
               </button>
             ))}
             <button onClick={() => {
@@ -286,14 +290,22 @@ const LibraryShelf = memo(function LibraryShelf({
   );
 });
 
-function HomeSkeleton({ serverName, chromeVisible }: { serverName: string; chromeVisible: boolean }) {
+function HomeSkeleton({
+  server,
+  serverIcons,
+  chromeVisible,
+}: {
+  server: SavedServer;
+  serverIcons: ReturnType<typeof useServerIconEntries>;
+  chromeVisible: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <div className="page home-page home-loading" aria-busy="true">
       <div className={`home-server-switch chrome-float ${chromeVisible ? "" : "hidden"}`}>
         <button type="button" disabled title={t("home.serverSwitchTitle")}>
-          <span className="home-icon"><UiIcon name="server" /></span>
-          {serverName}
+          <ServerAvatar server={server} icons={serverIcons} className="home-icon" />
+          <span className="home-server-name">{server.name}</span>
         </button>
       </div>
       <section className="feature-banner home-hero-skeleton">

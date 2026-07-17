@@ -43,6 +43,7 @@ export type SavedServer = {
   username: string;
   active: boolean;
   useSystemProxy: boolean;
+  iconUrl?: string | null;
   movieCount?: number | null;
   seriesCount?: number | null;
   episodeCount?: number | null;

@@ -535,9 +535,31 @@ h2 {
   width: 58px;
   height: 58px;
   place-items: center;
+  overflow: hidden;
   border-radius: 50%;
   background: #2f7b35;
   color: #fff;
+}
+
+.server-avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.server-avatar img {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  object-fit: contain;
+}
+
+.server-avatar-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
 }
 
 .server-counts {
@@ -853,6 +875,14 @@ h2 {
   font-weight: 950;
   letter-spacing: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.server-page .server-logo.has-image {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.server-page .server-logo img {
+  padding: 6px;
 }
 
 .server-status-dot {
