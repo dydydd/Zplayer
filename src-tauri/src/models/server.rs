@@ -81,6 +81,14 @@ pub(crate) struct ServerExport {
     pub(crate) servers: Vec<SavedServer>,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServerImportResult {
+    pub(crate) imported: usize,
+    pub(crate) added: usize,
+    pub(crate) updated: usize,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub(crate) struct PlaybackPreference {

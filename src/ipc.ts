@@ -18,6 +18,7 @@ import type {
   PlaybackState,
   PlayResult,
   SavedServer,
+  ServerImportResult,
   SearchPayload,
   ServerForm,
 } from "./types";
@@ -46,6 +47,7 @@ export const ipc = {
   testServerLogin: (input: ServerForm) => invoke<LoginResult>("test_server_login", { input }),
   saveServer: (input: LoginResult) => invoke<SavedServer>("save_server", { input }),
   exportServers: (path: string) => invoke<number>("export_servers", { input: { path } }),
+  importServers: (path: string) => invoke<ServerImportResult>("import_servers", { input: { path } }),
   setActiveServer: (serverId: string) => invoke<SavedServer>("set_active_server", { input: { serverId } }),
   deleteServer: (serverId: string) => invoke<void>("delete_server", { input: { serverId } }),
   playItem: (itemId: string, serverId?: string | null, mediaSourceId?: string, audioStreamIndex?: number, subtitleStreamIndex?: number, subtitleStreamPosition?: number) =>

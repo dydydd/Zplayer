@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useLayoutEffect } from "react";
 import { useDeferredValue } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -877,6 +877,29 @@ function App() {
     }
   }
 
+  async function importServerInfo() {
+    try {
+      const selected = await open({
+        title: t("server.importDialogTitle"),
+        multiple: false,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (typeof selected !== "string") return;
+      const result = await run(t("loading.importServers"), () => ipc.importServers(selected));
+      if (result) {
+        clearHomeMetadataCaches();
+        detailCache.current.clear();
+        libraryCache.current.clear();
+        setHome(null);
+        setLibrary(null);
+        setDetail(null);
+        await refreshServers();
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   async function exportServerInfo() {
     try {
       const targetPath = await saveDialog({
@@ -1258,6 +1281,7 @@ function App() {
           <ServerView
             servers={servers}
             onAdd={() => setModalOpen(true)}
+            onImport={importServerInfo}
             onExport={exportServerInfo}
             onActivate={activateServer}
             onEdit={editServer}

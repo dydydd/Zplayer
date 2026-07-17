@@ -46,6 +46,12 @@ export type SavedServer = {
   seriesCount?: number | null;
 };
 
+export type ServerImportResult = {
+  imported: number;
+  added: number;
+  updated: number;
+};
+
 export type AppSettings = {
   mpvPath?: string | null;
   defaultVolume?: number;

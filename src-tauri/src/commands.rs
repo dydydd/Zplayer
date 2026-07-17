@@ -7,7 +7,7 @@ use crate::models::{
     PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
     ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
     SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
-    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
+    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput, ServerImportResult,
 };
 use crate::mpv;
 use crate::platform_window::{self, LinuxWindowDiagnostics};
@@ -135,6 +135,18 @@ fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> 
 pub(crate) async fn export_servers(app: AppHandle, input: FilePathInput) -> Result<usize, String> {
     tauri::async_runtime::spawn_blocking(move || {
         store::export_servers(&app, PathBuf::from(input.path))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn import_servers(
+    app: AppHandle,
+    input: FilePathInput,
+) -> Result<ServerImportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        store::import_servers(&app, PathBuf::from(input.path))
     })
     .await
     .map_err(|err| err.to_string())?

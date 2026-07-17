@@ -1,6 +1,8 @@
 use crate::models::{
-    AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerExport, ServerStore,
+    AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerExport,
+    ServerImportResult, ServerStore,
 };
+use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -58,6 +60,16 @@ pub(crate) fn export_servers(app: &AppHandle, path: PathBuf) -> Result<usize, St
         .map_err(|err| format!("Failed to serialize server export: {err}"))?;
     fs::write(path, raw).map_err(|err| format!("Failed to export servers: {err}"))?;
     Ok(count)
+}
+
+pub(crate) fn import_servers(app: &AppHandle, path: PathBuf) -> Result<ServerImportResult, String> {
+    let raw =
+        fs::read_to_string(path).map_err(|err| format!("Failed to read server import: {err}"))?;
+    let imported = parse_server_import(&raw)?;
+    let mut store = load_store(app)?;
+    let result = merge_imported_servers(&mut store, imported)?;
+    save_store(app, &store)?;
+    Ok(result)
 }
 
 pub(crate) fn set_active_server(
@@ -238,9 +250,129 @@ fn save_store(app: &AppHandle, store: &ServerStore) -> Result<(), String> {
     fs::write(path, raw).map_err(|err| format!("Failed to save servers: {err}"))
 }
 
+fn parse_server_import(raw: &str) -> Result<Vec<SavedServer>, String> {
+    let value: Value =
+        serde_json::from_str(raw).map_err(|err| format!("Failed to parse server import: {err}"))?;
+    let servers = match value {
+        Value::Array(servers) => Value::Array(servers),
+        Value::Object(mut object) => {
+            if let Some(version) = object.get("version").and_then(Value::as_u64) {
+                if version != 1 {
+                    return Err(format!("Unsupported server export version: {version}"));
+                }
+            }
+            object
+                .remove("servers")
+                .ok_or_else(|| "Server import does not contain a servers list.".to_string())?
+        }
+        _ => return Err("Server import must be a JSON object or array.".to_string()),
+    };
+    serde_json::from_value(servers)
+        .map_err(|err| format!("Failed to decode imported servers: {err}"))
+}
+
+fn merge_imported_servers(
+    store: &mut ServerStore,
+    imported_servers: Vec<SavedServer>,
+) -> Result<ServerImportResult, String> {
+    if imported_servers.is_empty() {
+        return Err("Server import does not contain any servers.".to_string());
+    }
+    for server in &imported_servers {
+        validate_imported_server(server)?;
+    }
+
+    let imported = imported_servers.len();
+    let active_imported_id = imported_servers
+        .iter()
+        .find(|server| server.active)
+        .map(|server| server.id.clone());
+    let mut added = 0;
+    let mut updated = 0;
+
+    for server in imported_servers {
+        if let Some(existing) = store
+            .servers
+            .iter_mut()
+            .find(|existing| existing.id == server.id)
+        {
+            *existing = server;
+            updated += 1;
+        } else {
+            store.servers.push(server);
+            added += 1;
+        }
+    }
+
+    if let Some(active_id) = active_imported_id {
+        store.active_server_id = Some(active_id);
+    }
+    let active_missing = match &store.active_server_id {
+        Some(active_id) => !store.servers.iter().any(|server| server.id == *active_id),
+        None => true,
+    };
+    if active_missing {
+        store.active_server_id = store.servers.first().map(|server| server.id.clone());
+    }
+    for server in &mut store.servers {
+        server.active = store.active_server_id.as_ref() == Some(&server.id);
+    }
+
+    Ok(ServerImportResult {
+        imported,
+        added,
+        updated,
+    })
+}
+
+fn validate_imported_server(server: &SavedServer) -> Result<(), String> {
+    if server.id.trim().is_empty() {
+        return Err("Imported server is missing an id.".to_string());
+    }
+    if server.name.trim().is_empty() {
+        return Err(format!("Imported server {} is missing a name.", server.id));
+    }
+    if server.url.trim().is_empty() {
+        return Err(format!("Imported server {} is missing a URL.", server.id));
+    }
+    if server.username.trim().is_empty() {
+        return Err(format!(
+            "Imported server {} is missing a username.",
+            server.id
+        ));
+    }
+    if server.user_id.trim().is_empty() {
+        return Err(format!(
+            "Imported server {} is missing a user id.",
+            server.id
+        ));
+    }
+    if server.access_token.trim().is_empty() {
+        return Err(format!(
+            "Imported server {} is missing an access token.",
+            server.id
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn saved_server(id: &str, active: bool) -> SavedServer {
+        SavedServer {
+            id: id.to_string(),
+            name: format!("Server {id}"),
+            url: format!("http://{id}.example.test"),
+            username: "user".to_string(),
+            user_id: format!("user-{id}"),
+            access_token: format!("token-{id}"),
+            active,
+            saved_at: 1,
+            use_system_proxy: true,
+        }
+    }
 
     #[test]
     fn server_summary_includes_proxy_choice() {
@@ -276,5 +408,63 @@ mod tests {
             "series:series-1"
         );
         assert_eq!(playback_preference_key(None, "movie-1"), "item:movie-1");
+    }
+
+    #[test]
+    fn parse_server_import_reads_export_wrapper() {
+        let raw = serde_json::to_string(&ServerExport {
+            version: 1,
+            exported_at: 1,
+            servers: vec![saved_server("server-a", true)],
+        })
+        .unwrap();
+
+        let servers = parse_server_import(&raw).unwrap();
+
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].id, "server-a");
+    }
+
+    #[test]
+    fn merge_imported_servers_updates_existing_and_sets_active() {
+        let mut store = ServerStore {
+            active_server_id: Some("server-a".to_string()),
+            servers: vec![saved_server("server-a", true)],
+            ..ServerStore::default()
+        };
+        let mut updated = saved_server("server-a", false);
+        updated.name = "Updated".to_string();
+
+        let result =
+            merge_imported_servers(&mut store, vec![updated, saved_server("server-b", true)])
+                .unwrap();
+
+        assert_eq!(
+            result,
+            ServerImportResult {
+                imported: 2,
+                added: 1,
+                updated: 1,
+            }
+        );
+        assert_eq!(store.servers.len(), 2);
+        assert_eq!(store.active_server_id.as_deref(), Some("server-b"));
+        assert_eq!(
+            store
+                .servers
+                .iter()
+                .find(|server| server.id == "server-a")
+                .unwrap()
+                .name,
+            "Updated"
+        );
+        assert!(
+            store
+                .servers
+                .iter()
+                .find(|server| server.id == "server-b")
+                .unwrap()
+                .active
+        );
     }
 }

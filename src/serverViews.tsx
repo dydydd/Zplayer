@@ -8,6 +8,7 @@ import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 export function ServerView({
   servers,
   onAdd,
+  onImport,
   onExport,
   onActivate,
   onEdit,
@@ -16,6 +17,7 @@ export function ServerView({
 }: {
   servers: SavedServer[];
   onAdd: () => void;
+  onImport: () => Promise<void>;
   onExport: () => Promise<void>;
   onActivate: (id: string) => Promise<void>;
   onEdit: (server: SavedServer) => void;
@@ -36,6 +38,7 @@ export function ServerView({
           <p className="server-export-note">{t("server.exportNote")}</p>
         </div>
         <div className="server-heading-actions">
+          <button onClick={() => void onImport()}>{t("server.import")}</button>
           <button onClick={() => void onExport()} disabled={!servers.length}>{t("server.export")}</button>
           <button onClick={onAdd}>{t("server.add")}</button>
         </div>
