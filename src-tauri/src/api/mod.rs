@@ -302,22 +302,21 @@ pub(crate) fn get_show_seasons(
     server: &SavedServer,
     series_id: &str,
 ) -> Result<Vec<MediaItem>, String> {
-    let params = [
+    let emby_params = [
         ("UserId", server.user_id.clone()),
-        ("userId", server.user_id.clone()),
         ("Fields", item_fields()),
-        ("fields", item_fields()),
         ("EnableImages", "true".to_string()),
-        ("enableImages", "true".to_string()),
         ("EnableUserData", "true".to_string()),
+    ];
+    let jellyfin_params = [
+        ("userId", server.user_id.clone()),
+        ("fields", item_fields()),
+        ("enableImages", "true".to_string()),
         ("enableUserData", "true".to_string()),
     ];
-    get_items(
-        client,
-        server,
-        &format!("Shows/{series_id}/Seasons"),
-        &params,
-    )
+    let path = format!("Shows/{series_id}/Seasons");
+    get_items(client, server, &path, &emby_params)
+        .or_else(|_| get_items(client, server, &path, &jellyfin_params))
 }
 
 pub(crate) fn get_show_episodes(
@@ -326,36 +325,35 @@ pub(crate) fn get_show_episodes(
     series_id: &str,
     season_id: Option<&str>,
 ) -> Result<(Vec<MediaItem>, usize), String> {
-    let mut params = vec![
+    let mut emby_params = vec![
         ("UserId", server.user_id.clone()),
-        ("userId", server.user_id.clone()),
         ("Fields", item_fields()),
-        ("fields", item_fields()),
         (
             "SortBy",
             "ParentIndexNumber,IndexNumber,SortName".to_string(),
         ),
+        ("SortOrder", "Ascending".to_string()),
+        ("EnableImages", "true".to_string()),
+        ("EnableUserData", "true".to_string()),
+    ];
+    let mut jellyfin_params = vec![
+        ("userId", server.user_id.clone()),
+        ("fields", item_fields()),
         (
             "sortBy",
             "ParentIndexNumber,IndexNumber,SortName".to_string(),
         ),
-        ("SortOrder", "Ascending".to_string()),
         ("sortOrder", "Ascending".to_string()),
-        ("EnableImages", "true".to_string()),
         ("enableImages", "true".to_string()),
-        ("EnableUserData", "true".to_string()),
         ("enableUserData", "true".to_string()),
     ];
     if let Some(season_id) = season_id {
-        params.push(("SeasonId", season_id.to_string()));
-        params.push(("seasonId", season_id.to_string()));
+        emby_params.push(("SeasonId", season_id.to_string()));
+        jellyfin_params.push(("seasonId", season_id.to_string()));
     }
-    get_items_page(
-        client,
-        server,
-        &format!("Shows/{series_id}/Episodes"),
-        &params,
-    )
+    let path = format!("Shows/{series_id}/Episodes");
+    get_items_page(client, server, &path, &emby_params)
+        .or_else(|_| get_items_page(client, server, &path, &jellyfin_params))
 }
 
 pub(crate) fn get_similar_items(
