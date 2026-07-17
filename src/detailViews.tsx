@@ -88,6 +88,7 @@ export function DetailView({
   const selectedAudio = selectedSource?.audioStreams.find((stream) => stream.index === audioStreamIndex) ?? selectedSource?.audioStreams.find((stream) => stream.isDefault) ?? selectedSource?.audioStreams[0];
   const selectedSubtitle = selectedSource?.subtitleStreams.find((stream) => stream.index === subtitleStreamIndex) ?? selectedSource?.subtitleStreams.find((stream) => stream.isDefault) ?? selectedSource?.subtitleStreams[0];
   const currentSeason = sortedSeasons.find((season) => season.id === seasonId);
+  const canSwitchSeason = sortedSeasons.length > 1;
   const displayedEpisodeCount = episodeCountFrom(
     payload.episodeTotalCount,
     item.childCount,
@@ -241,13 +242,20 @@ export function DetailView({
           <div className="detail-episode-shelf">
             <div className="detail-section-head">
               <div className="episode-title-row">
-                {sortedSeasons.length > 1 ? (
-                  <div className={`season-switcher ${seasonPickerOpen ? "open" : ""}`} onMouseEnter={keepSeasonPickerOpen} onMouseLeave={closeSeasonPickerSoon}>
-                    <button className={`season-toggle ${seasonChanged ? "changed" : ""}`} onAnimationEnd={() => setSeasonChanged(false)} onClick={() => setSeasonPickerOpen((open) => !open)}>
+                {sortedSeasons.length > 0 ? (
+                  <div className={`season-switcher ${seasonPickerOpen && canSwitchSeason ? "open" : ""}`} onMouseEnter={canSwitchSeason ? keepSeasonPickerOpen : undefined} onMouseLeave={canSwitchSeason ? closeSeasonPickerSoon : undefined}>
+                    <button
+                      className={`season-toggle ${seasonChanged ? "changed" : ""}`}
+                      disabled={!canSwitchSeason}
+                      onAnimationEnd={() => setSeasonChanged(false)}
+                      onClick={() => {
+                        if (canSwitchSeason) setSeasonPickerOpen((open) => !open);
+                      }}
+                    >
                       <span>{currentSeason?.name ?? t("detail.season")}</span>
-                      <UiIcon name="chevron-right" />
+                      {canSwitchSeason && <UiIcon name="chevron-right" />}
                     </button>
-                    {seasonPickerOpen && (
+                    {seasonPickerOpen && canSwitchSeason && (
                       <div className="season-menu">
                         {sortedSeasons.filter((season) => season.id !== seasonId).map((season) => (
                           <button key={season.id} onClick={() => {

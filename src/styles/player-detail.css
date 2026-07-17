@@ -693,6 +693,10 @@
   transition: transform 0.16s var(--tv-ease), background 0.16s var(--tv-ease);
 }
 
+.season-toggle:disabled {
+  cursor: default;
+}
+
 .season-toggle span {
   overflow: hidden;
   text-overflow: ellipsis;
