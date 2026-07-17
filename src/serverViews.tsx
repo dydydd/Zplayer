@@ -8,6 +8,7 @@ import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 export function ServerView({
   servers,
   onAdd,
+  onExport,
   onActivate,
   onEdit,
   onDelete,
@@ -15,6 +16,7 @@ export function ServerView({
 }: {
   servers: SavedServer[];
   onAdd: () => void;
+  onExport: () => Promise<void>;
   onActivate: (id: string) => Promise<void>;
   onEdit: (server: SavedServer) => void;
   onDelete: (id: string) => Promise<void>;
@@ -31,8 +33,10 @@ export function ServerView({
           <span className="eyebrow">{t("server.eyebrow")}</span>
           <h1>{t("server.title")}</h1>
           <p>{t("server.subtitle")}</p>
+          <p className="server-export-note">{t("server.exportNote")}</p>
         </div>
         <div className="server-heading-actions">
+          <button onClick={() => void onExport()} disabled={!servers.length}>{t("server.export")}</button>
           <button onClick={onAdd}>{t("server.add")}</button>
         </div>
       </div>

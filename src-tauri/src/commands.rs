@@ -1,16 +1,18 @@
 use crate::api;
 use crate::models::{
-    normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, HomeMorePayload,
-    HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload, LibraryFiltersInput, LibraryInput,
-    LibraryLatestPayload, LibraryPayload, LoginInput, LoginResult, MarkInput, MediaItem,
-    MediaLibrary, MediaVersion, PlayResult, PlaybackControlInput, PlaybackPreference,
-    PlaybackStateInput, PlaybackStateResult, ReportPlaybackProgressInput, ReportPlaybackStartInput,
-    ReportPlaybackStoppedInput, SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput,
-    SavedServer, SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
+    normalize_settings, AppSettings, FetchServerNameInput, FetchServerNameResult, FilePathInput,
+    HomeMorePayload, HomePayload, ItemDetailPayload, ItemInput, ItemMorePayload,
+    LibraryFiltersInput, LibraryInput, LibraryLatestPayload, LibraryPayload, LoginInput,
+    LoginResult, MarkInput, MediaItem, MediaLibrary, MediaVersion, PlayResult,
+    PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
+    ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
+    SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
+    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput,
 };
 use crate::mpv;
 use crate::platform_window::{self, LinuxWindowDiagnostics};
 use crate::store;
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 use tauri::AppHandle;
@@ -127,6 +129,15 @@ fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> 
         }
     }
     Ok(summaries)
+}
+
+#[tauri::command]
+pub(crate) async fn export_servers(app: AppHandle, input: FilePathInput) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        store::export_servers(&app, PathBuf::from(input.path))
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

@@ -35,6 +35,7 @@ pub fn run() {
             commands::test_server_login,
             commands::save_server,
             commands::list_servers,
+            commands::export_servers,
             commands::load_settings,
             commands::save_settings,
             commands::set_active_server,

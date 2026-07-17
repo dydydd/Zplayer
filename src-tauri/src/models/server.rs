@@ -73,6 +73,14 @@ pub(crate) struct ServerStore {
     pub(crate) playback_preferences: HashMap<String, HashMap<String, PlaybackPreference>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServerExport {
+    pub(crate) version: u32,
+    pub(crate) exported_at: u64,
+    pub(crate) servers: Vec<SavedServer>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub(crate) struct PlaybackPreference {

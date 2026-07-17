@@ -12,6 +12,7 @@
     "core:window:allow-set-fullscreen",
     "core:window:allow-toggle-maximize",
     "dialog:allow-open",
+    "dialog:allow-save",
     "opener:default"
   ]
 }

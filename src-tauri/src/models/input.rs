@@ -8,6 +8,12 @@ pub(crate) struct ServerIdInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct FilePathInput {
+    pub(crate) path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct LibraryInput {
     pub(crate) library_id: String,
     pub(crate) start_index: Option<usize>,

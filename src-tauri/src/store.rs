@@ -1,5 +1,5 @@
 use crate::models::{
-    AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerStore,
+    AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerExport, ServerStore,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -44,6 +44,20 @@ pub(crate) fn list_servers(app: &AppHandle) -> Result<Vec<SavedServerSummary>, S
 
 pub(crate) fn servers(app: &AppHandle) -> Result<Vec<SavedServer>, String> {
     Ok(load_store(app)?.servers)
+}
+
+pub(crate) fn export_servers(app: &AppHandle, path: PathBuf) -> Result<usize, String> {
+    let store = load_store(app)?;
+    let count = store.servers.len();
+    let export = ServerExport {
+        version: 1,
+        exported_at: unix_now(),
+        servers: store.servers,
+    };
+    let raw = serde_json::to_string_pretty(&export)
+        .map_err(|err| format!("Failed to serialize server export: {err}"))?;
+    fs::write(path, raw).map_err(|err| format!("Failed to export servers: {err}"))?;
+    Ok(count)
 }
 
 pub(crate) fn set_active_server(

@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useLayoutEffect } from "react";
 import { useDeferredValue } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -876,6 +877,20 @@ function App() {
     }
   }
 
+  async function exportServerInfo() {
+    try {
+      const targetPath = await saveDialog({
+        title: t("server.exportDialogTitle"),
+        defaultPath: "zplayer-servers.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!targetPath) return;
+      await run(t("loading.exportServers"), () => ipc.exportServers(targetPath));
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   function editServer(server: SavedServer) {
     setEditingServerId(server.id);
     setTestedLogin(null);
@@ -1243,6 +1258,7 @@ function App() {
           <ServerView
             servers={servers}
             onAdd={() => setModalOpen(true)}
+            onExport={exportServerInfo}
             onActivate={activateServer}
             onEdit={editServer}
             onDelete={deleteServer}
