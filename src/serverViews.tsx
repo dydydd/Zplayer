@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { UiIcon } from "./icons";
@@ -25,46 +25,14 @@ export function ServerView({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState("");
-  const [sortByActivity, setSortByActivity] = useState(true);
-  const sortedServers = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return [...servers]
-      .filter((server) => {
-        if (!normalizedQuery) return true;
-        return [server.name, server.url, server.username].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-      })
-      .sort((left, right) => {
-        if (sortByActivity) {
-          return Number(right.active) - Number(left.active) || (right.movieCount ?? 0) - (left.movieCount ?? 0) || left.name.localeCompare(right.name);
-        }
-        return left.name.localeCompare(right.name);
-      });
-  }, [query, servers, sortByActivity]);
+  const sortedServers = [...servers].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
 
   return (
     <div className="page narrow server-page">
-      <aside className="server-side-rail" aria-hidden="true">
-        <span className="server-rail-logo">Z</span>
-        <span className="server-rail-avatar"><UiIcon name="server" /></span>
-        <span className="server-rail-dot" />
-        <span className="server-rail-button active"><UiIcon name="server" /></span>
-        <span className="server-rail-button"><UiIcon name="heart" /></span>
-        <span className="server-rail-spacer" />
-        <span className="server-rail-button"><UiIcon name="settings" /></span>
-      </aside>
       <div className="server-shell">
         <div className="server-topline">
           <button className="server-back" onClick={onBack} aria-label={t("common.back")}><UiIcon name="chevron-left" /></button>
           <h1>{t("server.manageTitle")}</h1>
-          <div className="server-toolstrip">
-            <label className="server-search">
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("server.searchPlaceholder")} />
-              <UiIcon name="search" />
-            </label>
-            <button type="button" className="server-pill">{t("server.needsAccount")}</button>
-            <button type="button" className="server-pill" onClick={() => setSortByActivity((value) => !value)}>{t("server.sort")}</button>
-          </div>
         </div>
         <div className="server-heading">
           <div>

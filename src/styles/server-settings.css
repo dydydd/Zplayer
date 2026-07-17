@@ -681,7 +681,7 @@ h2 {
 .server-page {
   min-height: 100vh;
   max-width: none !important;
-  padding: 34px 64px 48px 148px;
+  padding: 52px 88px 48px;
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 14%, rgba(247, 198, 197, 0.7), transparent 32%),
@@ -702,74 +702,9 @@ h2 {
   filter: blur(20px);
 }
 
-.server-side-rail,
 .server-shell {
   position: relative;
   z-index: 1;
-}
-
-.server-side-rail {
-  position: fixed;
-  top: 28px;
-  bottom: 28px;
-  left: 28px;
-  display: grid;
-  grid-template-rows: 48px 62px 12px repeat(2, 54px) 1fr 54px;
-  align-items: center;
-  justify-items: center;
-  width: 56px;
-  gap: 18px;
-}
-
-.server-rail-logo {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 10px;
-  background: #050505;
-  color: #fff;
-  font-size: 24px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.server-rail-avatar,
-.server-rail-button {
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #20232d;
-  box-shadow: 0 12px 28px rgba(31, 34, 45, 0.12);
-  backdrop-filter: blur(10px) saturate(1.2);
-}
-
-.server-rail-avatar {
-  width: 56px;
-  height: 56px;
-  background: rgba(34, 38, 46, 0.72);
-  color: #fff;
-}
-
-.server-rail-button {
-  width: 52px;
-  height: 52px;
-}
-
-.server-rail-button.active {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.server-rail-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(31, 34, 45, 0.46);
-}
-
-.server-rail-spacer {
-  min-height: 1px;
 }
 
 .server-shell {
@@ -781,7 +716,7 @@ h2 {
 
 .server-topline {
   display: grid;
-  grid-template-columns: 54px minmax(260px, 1fr) auto;
+  grid-template-columns: 54px minmax(260px, 1fr);
   align-items: center;
   gap: 18px;
 }
@@ -797,9 +732,7 @@ h2 {
   box-shadow: 0 12px 28px rgba(31, 34, 45, 0.1);
 }
 
-.server-back .ui-icon,
-.server-rail-button .ui-icon,
-.server-rail-avatar .ui-icon {
+.server-back .ui-icon {
   font-size: 22px;
 }
 
@@ -808,58 +741,6 @@ h2 {
   color: #20232d;
   font-size: clamp(30px, 3vw, 42px);
   line-height: 1.08;
-}
-
-.server-toolstrip {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
-
-.server-search {
-  position: relative;
-  display: grid;
-  align-items: center;
-  width: min(320px, 26vw);
-  min-width: 210px;
-}
-
-.server-search input {
-  width: 100%;
-  height: 56px;
-  padding: 0 58px 0 24px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.58);
-  color: #20232d;
-  font-size: 18px;
-  font-weight: 800;
-  outline: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66), 0 12px 28px rgba(31, 34, 45, 0.08);
-}
-
-.server-search input::placeholder {
-  color: rgba(32, 35, 45, 0.5);
-}
-
-.server-search .ui-icon {
-  position: absolute;
-  right: 20px;
-  color: #20232d;
-  font-size: 24px;
-}
-
-.server-pill {
-  height: 44px;
-  padding: 0 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #20232d;
-  font-size: 16px;
-  font-weight: 900;
-  box-shadow: 0 10px 24px rgba(31, 34, 45, 0.08);
 }
 
 .server-page .server-heading {
@@ -899,9 +780,7 @@ h2 {
 .server-page .server-heading-actions button:hover,
 .server-page .server-heading-actions button:focus-visible,
 .server-back:hover,
-.server-back:focus-visible,
-.server-pill:hover,
-.server-pill:focus-visible {
+.server-back:focus-visible {
   background: rgba(255, 255, 255, 0.92);
 }
 

@@ -141,21 +141,11 @@
   }
 
   .server-page {
-    padding: 28px 28px 42px 104px;
+    padding: 28px 28px 42px;
   }
 
   .server-topline {
     grid-template-columns: 54px minmax(0, 1fr);
-  }
-
-  .server-toolstrip {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .server-search {
-    width: min(100%, 360px);
   }
 
   .server-page .server-list {
@@ -323,10 +313,6 @@
     padding: calc(var(--chrome-top) + 8px) 16px 32px;
   }
 
-  .server-side-rail {
-    display: none;
-  }
-
   .server-topline {
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 12px;
@@ -335,15 +321,6 @@
   .server-back {
     width: 44px;
     height: 44px;
-  }
-
-  .server-toolstrip {
-    gap: 8px;
-  }
-
-  .server-search {
-    min-width: 0;
-    flex: 1 1 100%;
   }
 
   .server-page .server-heading {
