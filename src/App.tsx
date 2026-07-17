@@ -541,6 +541,23 @@ function App() {
     }
   }
 
+  async function runContentRequest<T>(request: number, label: string, action: () => Promise<T>) {
+    setLoading(label);
+    setError("");
+    try {
+      return await action();
+    } catch (err) {
+      if (request === requestId.current) {
+        setError(String(err));
+      }
+      return null;
+    } finally {
+      if (request === requestId.current) {
+        setLoading("");
+      }
+    }
+  }
+
   async function refreshServers() {
     const result = await run(t("loading.servers"), () =>
       ipc.listServers(),
@@ -600,6 +617,18 @@ function App() {
     if (itemId) detailCache.current.delete(itemCacheKey(itemId, serverId));
   }
 
+  function resetServerScopedState() {
+    requestId.current += 1;
+    clearHomeMetadataCaches();
+    detailCache.current.clear();
+    libraryCache.current.clear();
+    setHome(null);
+    setCalendar(null);
+    setLibrary(null);
+    setLibraryLoadingMore(false);
+    setDetail(null);
+  }
+
   function rememberHomePayload(payload: HomePayload) {
     if (!resolvedSettings.metadataCacheEnabled) return;
     homeCache.current.set(payload.server.id, payload);
@@ -643,7 +672,7 @@ function App() {
       return;
     }
     const currentRequest = ++requestId.current;
-    const result = await run(t("loading.home"), () => ipc.loadHome());
+    const result = await runContentRequest(currentRequest, t("loading.home"), () => ipc.loadHome());
     if (result && currentRequest === requestId.current) {
       rememberHomePayload(result);
       setHome(result);
@@ -688,7 +717,7 @@ function App() {
 
   async function loadWatchCalendar() {
     const currentRequest = ++requestId.current;
-    const result = await run(t("loading.calendar"), () => ipc.loadWatchCalendar());
+    const result = await runContentRequest(currentRequest, t("loading.calendar"), () => ipc.loadWatchCalendar());
     if (result && currentRequest === requestId.current) {
       setCalendar(result);
     }
@@ -703,7 +732,7 @@ function App() {
       return;
     }
     const currentRequest = ++requestId.current;
-    const result = await run(t("loading.library"), () =>
+    const result = await runContentRequest(currentRequest, t("loading.library"), () =>
       ipc.loadLibrary(libraryId, 0, 60, itemType, sortBy, sortOrder, filters),
     );
     if (result && currentRequest === requestId.current) {
@@ -734,6 +763,7 @@ function App() {
   const loadMoreLibraryItems = useCallback(async () => {
     if (!library || libraryLoadingMore || !library.hasMore) return;
     const currentLibrary = library;
+    const currentRequest = requestId.current;
     setLibraryLoadingMore(true);
     setError("");
     try {
@@ -761,9 +791,13 @@ function App() {
         return next;
       });
     } catch (err) {
-      setError(String(err));
+      if (currentRequest === requestId.current) {
+        setError(String(err));
+      }
     } finally {
-      setLibraryLoadingMore(false);
+      if (currentRequest === requestId.current) {
+        setLibraryLoadingMore(false);
+      }
     }
   }, [library, libraryLoadingMore, resolvedSettings.metadataCacheEnabled, view]);
 
@@ -783,7 +817,7 @@ function App() {
       detailCache.current.delete(key);
     }
     const currentRequest = ++requestId.current;
-    const result = await run(t("loading.detail"), () =>
+    const result = await runContentRequest(currentRequest, t("loading.detail"), () =>
       ipc.loadItem(itemId, serverId),
     );
     if (result && currentRequest === requestId.current) {
@@ -850,13 +884,7 @@ function App() {
       setForm(emptyForm);
       setTestedLogin(null);
       setEditingServerId("");
-      clearHomeMetadataCaches();
-      detailCache.current.clear();
-      libraryCache.current.clear();
-      setHome(null);
-      setCalendar(null);
-      setLibrary(null);
-      setDetail(null);
+      resetServerScopedState();
       await refreshServers();
     }
   }
@@ -876,13 +904,7 @@ function App() {
           episodeCount: result.episodeCount ?? server.episodeCount,
         } : { ...server, active: false }
       )));
-      clearHomeMetadataCaches();
-      detailCache.current.clear();
-      libraryCache.current.clear();
-      setHome(null);
-      setCalendar(null);
-      setLibrary(null);
-      setDetail(null);
+      resetServerScopedState();
       replaceView({ name: "home" });
     }
   }
@@ -892,13 +914,7 @@ function App() {
       ipc.deleteServer(serverId),
     );
     if (result !== null) {
-      clearHomeMetadataCaches();
-      detailCache.current.clear();
-      libraryCache.current.clear();
-      setHome(null);
-      setCalendar(null);
-      setLibrary(null);
-      setDetail(null);
+      resetServerScopedState();
       await refreshServers();
     }
   }
@@ -913,13 +929,7 @@ function App() {
       if (typeof selected !== "string") return;
       const result = await run(t("loading.importServers"), () => ipc.importServers(selected));
       if (result) {
-        clearHomeMetadataCaches();
-        detailCache.current.clear();
-        libraryCache.current.clear();
-        setHome(null);
-        setCalendar(null);
-        setLibrary(null);
-        setDetail(null);
+        resetServerScopedState();
         await refreshServers();
       }
     } catch (err) {
