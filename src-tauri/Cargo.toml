@@ -22,9 +22,6 @@ tauri = { version = "2", default-features = false, features = ["wry", "compressi
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-gtk = "0.18"
-gdkwayland-sys = "0.18"
-webkit2gtk = { version = "2.0", features = ["v2_8", "v2_16"] }
 libc = "0.2"
 libloading = "0.7.4"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
@@ -32,6 +29,11 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 # ponytail: keep cookie 0.18.1 compiling until upstream dependency bounds catch up.
 time = "=0.3.36"
 tauri-plugin-dialog = "2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+gdkwayland-sys = "0.18"
+webkit2gtk = { version = "2.0", features = ["v2_8", "v2_16"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
