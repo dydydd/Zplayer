@@ -42,10 +42,9 @@ export function ServerModal({
   const catalogUrls = useMemo(() => serverIconCatalogUrls(iconCatalogUrls), [iconCatalogUrls]);
   const filteredIcons = useMemo(() => {
     const query = iconSearch.trim().toLowerCase();
-    const matches = query
+    return query
       ? iconEntries.filter((icon) => icon.name.toLowerCase().includes(query))
       : iconEntries;
-    return matches.slice(0, 80);
   }, [iconEntries, iconSearch]);
   const canSubmit = !!testedLogin || canSaveWithoutLogin;
 
