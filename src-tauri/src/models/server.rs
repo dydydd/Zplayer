@@ -23,6 +23,20 @@ pub(crate) struct SaveServerInput {
     pub(crate) access_token: String,
     #[serde(default = "default_true")]
     pub(crate) use_system_proxy: bool,
+    #[serde(default)]
+    pub(crate) icon_url: Option<String>,
+    #[serde(default)]
+    pub(crate) icon_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServerIconInput {
+    pub(crate) server_id: String,
+    #[serde(default)]
+    pub(crate) icon_url: Option<String>,
+    #[serde(default)]
+    pub(crate) icon_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,6 +52,10 @@ pub(crate) struct SavedServer {
     pub(crate) saved_at: u64,
     #[serde(default = "default_true")]
     pub(crate) use_system_proxy: bool,
+    #[serde(default)]
+    pub(crate) icon_url: Option<String>,
+    #[serde(default)]
+    pub(crate) icon_name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +67,8 @@ pub(crate) struct SavedServerSummary {
     pub(crate) username: String,
     pub(crate) active: bool,
     pub(crate) use_system_proxy: bool,
+    pub(crate) icon_url: Option<String>,
+    pub(crate) icon_name: Option<String>,
     pub(crate) movie_count: Option<i64>,
     pub(crate) series_count: Option<i64>,
     pub(crate) episode_count: Option<i64>,
@@ -127,6 +147,8 @@ pub(crate) struct AppSettings {
     pub(crate) language: String,
     #[serde(default, alias = "tmdbAccessToken")]
     pub(crate) tmdb_api_key: Option<String>,
+    #[serde(default = "default_server_icon_catalog_urls")]
+    pub(crate) server_icon_catalog_urls: String,
 }
 
 impl Default for AppSettings {
@@ -144,6 +166,7 @@ impl Default for AppSettings {
             autoplay_next_episode: default_true(),
             language: default_language(),
             tmdb_api_key: None,
+            server_icon_catalog_urls: default_server_icon_catalog_urls(),
         }
     }
 }
@@ -164,6 +187,7 @@ pub(crate) struct SaveSettingsInput {
     pub(crate) language: Option<String>,
     #[serde(alias = "tmdbAccessToken")]
     pub(crate) tmdb_api_key: Option<String>,
+    pub(crate) server_icon_catalog_urls: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -210,6 +234,10 @@ fn default_language() -> String {
     "auto".to_string()
 }
 
+fn default_server_icon_catalog_urls() -> String {
+    "https://emby-icon.vercel.app/TFEL-Emby.json".to_string()
+}
+
 pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
     AppSettings {
         mpv_path: input
@@ -252,5 +280,20 @@ pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
             .tmdb_api_key
             .map(|key| key.trim().to_string())
             .filter(|key| !key.is_empty()),
+        server_icon_catalog_urls: normalize_server_icon_catalog_urls(
+            input.server_icon_catalog_urls,
+        ),
+    }
+}
+
+fn normalize_server_icon_catalog_urls(value: Option<String>) -> String {
+    match value {
+        Some(value) => value
+            .split(|character| character == '\n' || character == ',' || character == '，')
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        None => default_server_icon_catalog_urls(),
     }
 }

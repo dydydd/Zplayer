@@ -7,8 +7,8 @@ use crate::models::{
     PlaybackControlInput, PlaybackPreference, PlaybackStateInput, PlaybackStateResult,
     ReportPlaybackProgressInput, ReportPlaybackStartInput, ReportPlaybackStoppedInput,
     SavePlaybackPreferenceInput, SaveServerInput, SaveSettingsInput, SavedServer,
-    SavedServerSummary, SearchInput, SearchPayload, ServerIdInput, ServerImportResult, TmdbEpisode,
-    WatchCalendarDay, WatchCalendarEpisode, WatchCalendarPayload,
+    SavedServerSummary, SearchInput, SearchPayload, ServerIconInput, ServerIdInput,
+    ServerImportResult, TmdbEpisode, WatchCalendarDay, WatchCalendarEpisode, WatchCalendarPayload,
 };
 use crate::mpv;
 use crate::platform_window::{self, LinuxWindowDiagnostics};
@@ -94,8 +94,20 @@ fn save_server_sync(app: AppHandle, input: SaveServerInput) -> Result<SavedServe
         active: true,
         saved_at: store::unix_now(),
         use_system_proxy: input.use_system_proxy,
+        icon_url: clean_optional_string(input.icon_url),
+        icon_name: clean_optional_string(input.icon_name),
     };
     store::save_server(&app, saved)
+}
+
+#[tauri::command]
+pub(crate) async fn update_server_icon(
+    app: AppHandle,
+    input: ServerIconInput,
+) -> Result<SavedServerSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || store::update_server_icon(&app, input))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -135,6 +147,12 @@ fn list_servers_sync(app: AppHandle) -> Result<Vec<SavedServerSummary>, String> 
         }
     }
     Ok(summaries)
+}
+
+fn clean_optional_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 #[tauri::command]

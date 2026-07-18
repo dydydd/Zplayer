@@ -5,7 +5,7 @@ import type { HomePayload, MediaItem, SavedServer } from "./types";
 import { UiIcon } from "./icons";
 import { bg, itemMeta } from "./media";
 import { ServerAvatar } from "./ServerAvatar";
-import { useServerIconEntries } from "./serverIcons";
+import { serverIconCatalogUrls, useServerIconEntries } from "./serverIcons";
 import { rotateDaily } from "./viewLogic";
 import { EmptyState, Image, ScrollableStage, ShelfHeader } from "./viewParts";
 
@@ -30,6 +30,7 @@ export function HomeView({
   home,
   activeServer,
   servers,
+  serverIconCatalogUrls: iconCatalogUrls,
   onAddServer,
   onOpenServers,
   onOpenSettings,
@@ -46,6 +47,7 @@ export function HomeView({
   home: HomePayload | null;
   activeServer: SavedServer | null;
   servers: SavedServer[];
+  serverIconCatalogUrls: string;
   onAddServer: () => void;
   onOpenServers: () => void;
   onOpenSettings: () => void;
@@ -60,7 +62,7 @@ export function HomeView({
   chromeVisible: boolean;
 }) {
   const { t } = useTranslation();
-  const serverIcons = useServerIconEntries();
+  const serverIcons = useServerIconEntries(serverIconCatalogUrls(iconCatalogUrls));
   const [heroIndex, setHeroIndex] = useState(0);
   const [visibleFeaturedImage, setVisibleFeaturedImage] = useState<string | null | undefined>(undefined);
   const longPressTimer = useRef<number | null>(null);

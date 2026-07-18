@@ -47,6 +47,10 @@ mod tests {
         assert!(settings.autoplay_next_episode);
         assert_eq!(settings.language, "auto");
         assert_eq!(settings.tmdb_api_key, None);
+        assert_eq!(
+            settings.server_icon_catalog_urls,
+            "https://emby-icon.vercel.app/TFEL-Emby.json"
+        );
     }
 
     #[test]
@@ -64,6 +68,9 @@ mod tests {
             autoplay_next_episode: Some(false),
             language: Some("fr-FR".to_string()),
             tmdb_api_key: Some("  tmdb-key  ".to_string()),
+            server_icon_catalog_urls: Some(
+                " https://one.example/icons.json \n\nhttps://two.example/icons.json ".to_string(),
+            ),
         });
 
         assert_eq!(settings.mpv_path.as_deref(), Some("C:/libmpv/libmpv-2.dll"));
@@ -78,5 +85,9 @@ mod tests {
         assert!(!settings.autoplay_next_episode);
         assert_eq!(settings.language, "auto");
         assert_eq!(settings.tmdb_api_key.as_deref(), Some("tmdb-key"));
+        assert_eq!(
+            settings.server_icon_catalog_urls,
+            "https://one.example/icons.json\nhttps://two.example/icons.json"
+        );
     }
 }

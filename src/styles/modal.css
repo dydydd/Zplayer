@@ -117,6 +117,155 @@
   height: 24px;
 }
 
+.server-icon-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.server-icon-header {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.server-modal-avatar {
+  width: 58px;
+  height: 58px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.server-modal-avatar img {
+  padding: 6px;
+}
+
+.server-icon-header strong,
+.server-icon-header span,
+.server-icon-header small,
+.icon-count,
+.icon-error {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-icon-header strong {
+  color: #fff;
+  font-size: 17px;
+}
+
+.server-icon-header span,
+.server-icon-header small,
+.icon-count {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.server-icon-header small {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.icon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.icon-actions button {
+  min-width: 92px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.icon-actions button:hover,
+.icon-actions button:focus-visible {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.icon-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.icon-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  max-height: 260px;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  scrollbar-width: thin;
+}
+
+.icon-grid button {
+  display: grid;
+  min-width: 0;
+  min-height: 92px;
+  grid-template-rows: 42px auto;
+  place-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.icon-grid button:hover,
+.icon-grid button:focus-visible,
+.icon-grid button.selected {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.icon-grid img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.icon-grid span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-error {
+  color: #ffb4b4;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .modal-actions {
   display: flex;
   flex-wrap: wrap;

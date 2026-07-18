@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export type ServerIconEntry = {
   name: string;
@@ -21,10 +21,11 @@ const GENERIC_ICON_NAMES = new Set(["emby", "jellyfin", "media", "server"]);
 
 let memoryCatalogKey = "";
 let memoryIcons: ServerIconEntry[] | null = null;
+let loadingCatalogKey = "";
 let loadingIcons: Promise<ServerIconEntry[]> | null = null;
 
 export function useServerIconEntries(catalogUrls: readonly string[] = DEFAULT_SERVER_ICON_CATALOG_URLS) {
-  const catalogKey = useMemo(() => serverIconCatalogKey(catalogUrls), [catalogUrls]);
+  const catalogKey = serverIconCatalogKey(catalogUrls);
   const [icons, setIcons] = useState<ServerIconEntry[]>(() => {
     if (memoryCatalogKey === catalogKey && memoryIcons) return memoryIcons;
     return readServerIconCache(catalogKey, false) ?? [];
@@ -32,13 +33,13 @@ export function useServerIconEntries(catalogUrls: readonly string[] = DEFAULT_SE
 
   useEffect(() => {
     let cancelled = false;
-    void loadServerIconEntries(catalogUrls).then((nextIcons) => {
+    void loadServerIconEntries(catalogKey ? catalogKey.split("\n") : []).then((nextIcons) => {
       if (!cancelled) setIcons(nextIcons);
     });
     return () => {
       cancelled = true;
     };
-  }, [catalogKey, catalogUrls]);
+  }, [catalogKey]);
 
   return icons;
 }
@@ -63,6 +64,13 @@ export function resolveServerIconUrl(serverName: string, icons: ServerIconEntry[
     .filter((icon) => icon.normalizedName.length >= 3 && !GENERIC_ICON_NAMES.has(icon.normalizedName))
     .sort((left, right) => right.normalizedName.length - left.normalizedName.length)
     .find((icon) => normalizedServerName.includes(icon.normalizedName))?.url ?? null;
+}
+
+export function serverIconCatalogUrls(value: string) {
+  return value
+    .split(/[\n,，]+/)
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
 
 export function parseServerIconCatalog(value: unknown, catalogUrl: string) {
@@ -120,7 +128,7 @@ function serverIconCatalogKey(catalogUrls: readonly string[]) {
   return [...catalogUrls].join("\n");
 }
 
-async function loadServerIconEntries(catalogUrls: readonly string[]) {
+export async function loadServerIconEntries(catalogUrls: readonly string[]) {
   const catalogKey = serverIconCatalogKey(catalogUrls);
   if (memoryCatalogKey === catalogKey && memoryIcons) return memoryIcons;
 
@@ -131,10 +139,14 @@ async function loadServerIconEntries(catalogUrls: readonly string[]) {
     return cached;
   }
 
-  if (loadingIcons) return loadingIcons;
+  if (loadingIcons && loadingCatalogKey === catalogKey) return loadingIcons;
+  loadingCatalogKey = catalogKey;
   loadingIcons = fetchServerIconEntries(catalogUrls, catalogKey)
     .finally(() => {
-      loadingIcons = null;
+      if (loadingCatalogKey === catalogKey) {
+        loadingCatalogKey = "";
+        loadingIcons = null;
+      }
     });
   return loadingIcons;
 }

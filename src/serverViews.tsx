@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { UiIcon } from "./icons";
 import { ServerAvatar } from "./ServerAvatar";
-import { useServerIconEntries } from "./serverIcons";
+import { serverIconCatalogUrls, useServerIconEntries } from "./serverIcons";
 import type { AppLanguage, AppSettings, LinuxWindowDiagnostics, PlayResult, SavedServer } from "./types";
 import { defaultAppSettings, withAppSettingsDefaults } from "./types";
 
 export function ServerView({
   servers,
+  serverIconCatalogUrls: iconCatalogUrls,
   onAdd,
   onImport,
   onExport,
@@ -18,6 +19,7 @@ export function ServerView({
   onBack,
 }: {
   servers: SavedServer[];
+  serverIconCatalogUrls: string;
   onAdd: () => void;
   onImport: () => Promise<void>;
   onExport: () => Promise<void>;
@@ -27,7 +29,7 @@ export function ServerView({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const serverIcons = useServerIconEntries();
+  const serverIcons = useServerIconEntries(serverIconCatalogUrls(iconCatalogUrls));
   const sortedServers = [...servers].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
 
   return (
@@ -200,6 +202,18 @@ export function SettingsView({
               onChange={(event) => update("tmdbApiKey", event.target.value)}
               placeholder={t("settings.tmdbTokenPlaceholder")}
               autoComplete="off"
+            />
+          </label>
+        </SettingsPanel>
+
+        <SettingsPanel title={t("settings.serverIconsTitle")} note={t("settings.serverIconsNote")}>
+          <label className="settings-field">
+            {t("settings.serverIconCatalogUrls")}
+            <textarea
+              className="settings-path-input settings-textarea"
+              value={draft.serverIconCatalogUrls}
+              onChange={(event) => update("serverIconCatalogUrls", event.target.value)}
+              placeholder={t("settings.serverIconCatalogUrlsPlaceholder")}
             />
           </label>
         </SettingsPanel>

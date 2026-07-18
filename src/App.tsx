@@ -10,7 +10,7 @@ import { applyLanguage } from "./i18n";
 import { ServerModal } from "./ServerModal";
 import { TopBar } from "./TopBar";
 import { CalendarView, DetailView, HomeView, LibraryView, LoadingPage, PlayerView, SearchOverlay, ServerView, SettingsView } from "./views";
-import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, View, WatchCalendarPayload } from "./types";
+import type { AppSettings, HomePayload, ItemDetailPayload, LibraryFilters, LibraryItemType, LibraryPayload, LibrarySortBy, LibrarySortOrder, LinuxWindowDiagnostics, LoginResult, MediaItem, MediaVersion, PlaybackCommand, PlaybackPreference, PlaybackPreferenceInput, PlaybackState, PlayResult, ResolvedAppSettings, SavedServer, ServerForm, ServerIconSelection, View, WatchCalendarPayload } from "./types";
 import { emptyForm, withAppSettingsDefaults } from "./types";
 import { collectionLibraryView, episodePlaybackContext, findKnownItem, libraryKey, preferencePayload, preferredStreamIndex, relativeEpisodeId, scopedPlaybackPreferenceKey } from "./appLogic";
 import "./App.css";
@@ -150,6 +150,10 @@ function mediaSourceForPlayback(sources: MediaVersion[] | undefined, mediaSource
   return sources.find((source) => source.id === mediaSourceId && (!serverId || !source.serverId || source.serverId === serverId))
     ?? sources.find((source) => !serverId || !source.serverId || source.serverId === serverId)
     ?? sources[0];
+}
+
+function isServerIconFormKey(key: keyof ServerForm) {
+  return key === "iconUrl" || key === "iconName";
 }
 
 function sourceMatchesView(source: MediaVersion, mediaSourceId?: string | null, serverId?: string | null) {
@@ -877,7 +881,7 @@ function App() {
       return;
     }
     const result = await run(t("loading.saveServer"), () =>
-      ipc.saveServer(testedLogin),
+      ipc.saveServer({ ...testedLogin, ...serverIconSelectionFromForm() }),
     );
     if (result) {
       setModalOpen(false);
@@ -886,6 +890,38 @@ function App() {
       setEditingServerId("");
       resetServerScopedState();
       await refreshServers();
+    }
+  }
+
+  async function saveServerIcon() {
+    if (!editingServerId) return;
+    const result = await run(t("loading.saveServer"), () =>
+      ipc.updateServerIcon({ serverId: editingServerId, ...serverIconSelectionFromForm() }),
+    );
+    if (result) {
+      setServers((current) => current.map((server) => (
+        server.id === result.id ? {
+          ...server,
+          ...result,
+          movieCount: result.movieCount ?? server.movieCount,
+          seriesCount: result.seriesCount ?? server.seriesCount,
+          episodeCount: result.episodeCount ?? server.episodeCount,
+        } : server
+      )));
+      setHome((current) => current && current.server.id === result.id ? {
+        ...current,
+        server: {
+          ...current.server,
+          ...result,
+          movieCount: result.movieCount ?? current.server.movieCount,
+          seriesCount: result.seriesCount ?? current.server.seriesCount,
+          episodeCount: result.episodeCount ?? current.server.episodeCount,
+        },
+      } : current);
+      setModalOpen(false);
+      setForm(emptyForm);
+      setTestedLogin(null);
+      setEditingServerId("");
     }
   }
 
@@ -968,6 +1004,8 @@ function App() {
       username: server.username,
       password: "",
       useSystemProxy: server.useSystemProxy,
+      iconUrl: server.iconUrl ?? "",
+      iconName: server.iconName ?? "",
     });
     setModalOpen(true);
   }
@@ -1193,8 +1231,29 @@ function App() {
     });
   }
   function updateForm<K extends keyof ServerForm>(key: K, value: ServerForm[K]) {
-    setTestedLogin(null);
+    if (!isServerIconFormKey(key)) {
+      setTestedLogin(null);
+    }
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function serverIconSelectionFromForm(): ServerIconSelection {
+    const clean = (value: string) => value.trim() || null;
+    return {
+      iconUrl: clean(form.iconUrl),
+      iconName: clean(form.iconName),
+    };
+  }
+
+  function canSaveEditingIconWithoutLogin() {
+    if (!editingServerId || testedLogin) return false;
+    const server = servers.find((entry) => entry.id === editingServerId);
+    if (!server) return false;
+    return form.name === server.name
+      && form.url === server.url
+      && form.username === server.username
+      && form.password === ""
+      && form.useSystemProxy === server.useSystemProxy;
   }
 
   async function autoFetchServerName() {
@@ -1325,6 +1384,7 @@ function App() {
         {showContent && view.name === "servers" && (
           <ServerView
             servers={servers}
+            serverIconCatalogUrls={resolvedSettings.serverIconCatalogUrls}
             onAdd={() => setModalOpen(true)}
             onImport={importServerInfo}
             onExport={exportServerInfo}
@@ -1356,6 +1416,7 @@ function App() {
             home={home}
             activeServer={activeServer}
             servers={servers}
+            serverIconCatalogUrls={resolvedSettings.serverIconCatalogUrls}
             onAddServer={() => setModalOpen(true)}
             onOpenServers={openServers}
             onOpenSettings={openSettings}
@@ -1448,6 +1509,8 @@ function App() {
           form={form}
           testedLogin={testedLogin}
           showPassword={showPassword}
+          canSaveWithoutLogin={canSaveEditingIconWithoutLogin()}
+          iconCatalogUrls={resolvedSettings.serverIconCatalogUrls}
           onClose={() => {
             setModalOpen(false);
             setEditingServerId("");
@@ -1457,6 +1520,8 @@ function App() {
           onSubmit={() => {
             if (testedLogin) {
               void saveServer();
+            } else if (canSaveEditingIconWithoutLogin()) {
+              void saveServerIcon();
             } else {
               void testLogin();
             }

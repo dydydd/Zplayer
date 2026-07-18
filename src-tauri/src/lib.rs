@@ -34,6 +34,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::test_server_login,
             commands::save_server,
+            commands::update_server_icon,
             commands::list_servers,
             commands::export_servers,
             commands::import_servers,

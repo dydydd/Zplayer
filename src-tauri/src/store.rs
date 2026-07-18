@@ -1,6 +1,6 @@
 use crate::models::{
     AppSettings, PlaybackPreference, SavedServer, SavedServerSummary, ServerExport,
-    ServerImportResult, ServerStore,
+    ServerIconInput, ServerImportResult, ServerStore,
 };
 use serde_json::Value;
 use std::fs;
@@ -42,6 +42,25 @@ pub(crate) fn save_server(
 pub(crate) fn list_servers(app: &AppHandle) -> Result<Vec<SavedServerSummary>, String> {
     let store = load_store(app)?;
     Ok(store.servers.iter().map(server_summary).collect())
+}
+
+pub(crate) fn update_server_icon(
+    app: &AppHandle,
+    input: ServerIconInput,
+) -> Result<SavedServerSummary, String> {
+    let mut store = load_store(app)?;
+    let summary = {
+        let server = store
+            .servers
+            .iter_mut()
+            .find(|server| server.id == input.server_id)
+            .ok_or_else(|| "Server not found.".to_string())?;
+        server.icon_url = clean_optional_string(input.icon_url);
+        server.icon_name = clean_optional_string(input.icon_name);
+        server_summary(server)
+    };
+    save_store(app, &store)?;
+    Ok(summary)
 }
 
 pub(crate) fn servers(app: &AppHandle) -> Result<Vec<SavedServer>, String> {
@@ -211,10 +230,18 @@ pub(crate) fn server_summary(server: &SavedServer) -> SavedServerSummary {
         username: server.username.clone(),
         active: server.active,
         use_system_proxy: server.use_system_proxy,
+        icon_url: server.icon_url.clone(),
+        icon_name: server.icon_name.clone(),
         movie_count: None,
         series_count: None,
         episode_count: None,
     }
+}
+
+fn clean_optional_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 pub(crate) fn unix_now() -> u64 {
@@ -372,6 +399,8 @@ mod tests {
             active,
             saved_at: 1,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         }
     }
 
@@ -387,6 +416,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: false,
+            icon_url: None,
+            icon_name: None,
         });
 
         assert!(!summary.use_system_proxy);

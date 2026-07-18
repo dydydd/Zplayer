@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeServerIconName, parseServerIconCatalog, resolveServerIconUrl } from "./serverIcons.ts";
+import { normalizeServerIconName, parseServerIconCatalog, resolveServerIconUrl, serverIconCatalogUrls } from "./serverIcons.ts";
 
 const icons = [
   { name: "Forward", url: "https://example.test/Forward.PNG" },
@@ -33,4 +33,15 @@ test("matches server icons by normalized name", () => {
 test("matches server names with common suffixes without using generic emby", () => {
   assert.equal(resolveServerIconUrl("Forward Emby", icons), "https://example.test/Forward.PNG");
   assert.equal(resolveServerIconUrl("My Emby Server", icons), null);
+});
+
+test("splits global server icon catalog urls", () => {
+  assert.deepEqual(
+    serverIconCatalogUrls(" https://one.example/icons.json \n\nhttps://two.example/icons.json，https://three.example/icons.json "),
+    [
+      "https://one.example/icons.json",
+      "https://two.example/icons.json",
+      "https://three.example/icons.json",
+    ],
+  );
 });

@@ -1366,6 +1366,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
 
         let url = media_playback_url(&server, "/Videos/item/stream?static=true").unwrap();
@@ -1403,6 +1405,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
         let info = PlaybackInfo {
             play_session_id: Some("server-session".to_string()),
@@ -1454,6 +1458,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
         let info = PlaybackInfo {
             play_session_id: Some("server-session".to_string()),
@@ -1500,6 +1506,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
         let info = PlaybackInfo {
             play_session_id: Some("server-session".to_string()),
@@ -1546,6 +1554,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
 
         let url = fallback_stream_url(
@@ -1577,6 +1587,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
 
         let url = fallback_stream_url(&server, "item", None, None, Some(-1), "session").unwrap();
@@ -1598,6 +1610,8 @@ mod tests {
             active: true,
             saved_at: 0,
             use_system_proxy: true,
+            icon_url: None,
+            icon_name: None,
         };
         let mut item = ApiItem {
             id: "item".to_string(),

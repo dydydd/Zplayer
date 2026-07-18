@@ -137,15 +137,28 @@ h2 {
   font-weight: 900;
 }
 
-.settings-panel input {
+.settings-panel input,
+.settings-panel textarea {
   width: 100%;
-  height: 46px;
+  min-height: 46px;
   padding: 0 16px;
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   font-weight: 800;
+}
+
+.settings-panel input {
+  height: 46px;
+}
+
+.settings-panel textarea {
+  min-height: 108px;
+  padding-top: 13px;
+  padding-bottom: 13px;
+  resize: vertical;
+  line-height: 1.4;
 }
 
 .settings-field {

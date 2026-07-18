@@ -1,5 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UiIcon } from "./icons";
+import { ServerAvatar } from "./ServerAvatar";
+import { loadServerIconEntries, resolveServerIconUrl, serverIconCatalogUrls, type ServerIconEntry } from "./serverIcons";
 import type { LoginResult, ServerForm } from "./types";
 
 type ServerModalProps = {
@@ -7,6 +10,8 @@ type ServerModalProps = {
   form: ServerForm;
   testedLogin: LoginResult | null;
   showPassword: boolean;
+  canSaveWithoutLogin: boolean;
+  iconCatalogUrls: string;
   onClose: () => void;
   onSubmit: () => void;
   onTestLogin: () => void;
@@ -20,6 +25,8 @@ export function ServerModal({
   form,
   testedLogin,
   showPassword,
+  canSaveWithoutLogin,
+  iconCatalogUrls,
   onClose,
   onSubmit,
   onTestLogin,
@@ -28,6 +35,53 @@ export function ServerModal({
   onUpdateForm,
 }: ServerModalProps) {
   const { t } = useTranslation();
+  const [iconEntries, setIconEntries] = useState<ServerIconEntry[]>([]);
+  const [iconSearch, setIconSearch] = useState("");
+  const [iconLoading, setIconLoading] = useState(false);
+  const [iconError, setIconError] = useState("");
+  const catalogUrls = useMemo(() => serverIconCatalogUrls(iconCatalogUrls), [iconCatalogUrls]);
+  const filteredIcons = useMemo(() => {
+    const query = iconSearch.trim().toLowerCase();
+    const matches = query
+      ? iconEntries.filter((icon) => icon.name.toLowerCase().includes(query))
+      : iconEntries;
+    return matches.slice(0, 80);
+  }, [iconEntries, iconSearch]);
+  const canSubmit = !!testedLogin || canSaveWithoutLogin;
+
+  useEffect(() => {
+    setIconEntries([]);
+    setIconError("");
+  }, [iconCatalogUrls]);
+
+  async function loadIcons(autoMatch: boolean) {
+    if (!catalogUrls.length) return;
+    setIconLoading(true);
+    setIconError("");
+    try {
+      const icons = await loadServerIconEntries(catalogUrls);
+      setIconEntries(icons);
+      if (autoMatch) {
+        const iconUrl = resolveServerIconUrl(form.name, icons);
+        const icon = icons.find((entry) => entry.url === iconUrl);
+        if (icon) {
+          onUpdateForm("iconUrl", icon.url);
+          onUpdateForm("iconName", icon.name);
+        } else {
+          setIconError(t("modal.iconNoMatch"));
+        }
+      }
+    } catch (err) {
+      setIconError(String(err));
+    } finally {
+      setIconLoading(false);
+    }
+  }
+
+  function chooseIcon(icon: ServerIconEntry) {
+    onUpdateForm("iconUrl", icon.url);
+    onUpdateForm("iconName", icon.name);
+  }
 
   return (
     <div className="modal-backdrop">
@@ -103,12 +157,79 @@ export function ServerModal({
           />
           {t("modal.systemProxy")}
         </label>
+        <section className="server-icon-section">
+          <div className="server-icon-header">
+            <ServerAvatar server={{ name: form.name, iconUrl: form.iconUrl }} icons={iconEntries} className="server-modal-avatar" />
+            <div>
+              <strong>{t("modal.iconTitle")}</strong>
+              <span>{form.iconName || t("modal.iconAuto")}</span>
+              <small>{catalogUrls.length ? t("modal.iconSourceCount", { count: catalogUrls.length }) : t("modal.iconSourceMissing")}</small>
+            </div>
+          </div>
+          <div className="icon-actions">
+            <button type="button" onClick={() => void loadIcons(false)} disabled={!catalogUrls.length || iconLoading}>
+              {iconLoading ? t("modal.iconLoading") : t("modal.loadIcons")}
+            </button>
+            <button type="button" onClick={() => void loadIcons(true)} disabled={!catalogUrls.length || iconLoading}>
+              {t("modal.autoMatchIcon")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateForm("iconUrl", "");
+                onUpdateForm("iconName", "");
+              }}
+              disabled={!form.iconUrl && !form.iconName}
+            >
+              {t("modal.clearIcon")}
+            </button>
+          </div>
+          <label>
+            {t("modal.iconUrl")}
+            <input
+              value={form.iconUrl}
+              onChange={(event) => {
+                onUpdateForm("iconUrl", event.target.value);
+                if (form.iconName) onUpdateForm("iconName", "");
+              }}
+              placeholder={t("modal.iconUrlPlaceholder")}
+            />
+          </label>
+          {iconEntries.length ? (
+            <div className="icon-picker">
+              <label>
+                {t("modal.iconSearch")}
+                <input
+                  value={iconSearch}
+                  onChange={(event) => setIconSearch(event.target.value)}
+                  placeholder={t("modal.iconSearchPlaceholder")}
+                />
+              </label>
+              <div className="icon-grid" aria-label={t("modal.iconTitle")}>
+                {filteredIcons.map((icon) => (
+                  <button
+                    type="button"
+                    key={`${icon.name}:${icon.url}`}
+                    className={icon.url === form.iconUrl ? "selected" : ""}
+                    onClick={() => chooseIcon(icon)}
+                    title={icon.name}
+                  >
+                    <img src={icon.url} alt="" loading="lazy" decoding="async" />
+                    <span>{icon.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {iconEntries.length ? <span className="icon-count">{t("modal.iconCount", { count: iconEntries.length })}</span> : null}
+          {iconError ? <span className="icon-error">{iconError}</span> : null}
+        </section>
         <div className="modal-actions">
-          <span>{testedLogin ? t("modal.loginPassed") : t("modal.loginRequired")}</span>
+          <span>{testedLogin ? t("modal.loginPassed") : canSaveWithoutLogin ? t("modal.iconOnlySaveHint") : t("modal.loginRequired")}</span>
           <button type="button" onClick={onTestLogin}>
             {t("modal.testLogin")}
           </button>
-          <button type="submit" disabled={!testedLogin}>
+          <button type="submit" disabled={!canSubmit}>
             {t("common.save")}
           </button>
         </div>

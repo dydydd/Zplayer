@@ -44,6 +44,7 @@ export type SavedServer = {
   active: boolean;
   useSystemProxy: boolean;
   iconUrl?: string | null;
+  iconName?: string | null;
   movieCount?: number | null;
   seriesCount?: number | null;
   episodeCount?: number | null;
@@ -68,6 +69,7 @@ export type AppSettings = {
   autoplayNextEpisode?: boolean;
   language?: AppLanguage;
   tmdbApiKey?: string | null;
+  serverIconCatalogUrls?: string | null;
 };
 
 export type LinuxWindowDiagnostics = {
@@ -107,6 +109,7 @@ export type ResolvedAppSettings = {
   autoplayNextEpisode: boolean;
   language: AppLanguage;
   tmdbApiKey: string;
+  serverIconCatalogUrls: string;
 };
 
 export const defaultAppSettings: ResolvedAppSettings = {
@@ -122,6 +125,7 @@ export const defaultAppSettings: ResolvedAppSettings = {
   autoplayNextEpisode: true,
   language: "auto",
   tmdbApiKey: "",
+  serverIconCatalogUrls: "https://emby-icon.vercel.app/TFEL-Emby.json",
 };
 
 export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedAppSettings {
@@ -140,6 +144,7 @@ export function withAppSettingsDefaults(settings: AppSettings = {}): ResolvedApp
     autoplayNextEpisode: settings.autoplayNextEpisode ?? defaultAppSettings.autoplayNextEpisode,
     language: normalizeLanguage(settings.language),
     tmdbApiKey: settings.tmdbApiKey ?? "",
+    serverIconCatalogUrls: settings.serverIconCatalogUrls ?? defaultAppSettings.serverIconCatalogUrls,
   };
 }
 
@@ -151,6 +156,17 @@ export type LoginResult = {
   userId: string;
   accessToken: string;
   useSystemProxy: boolean;
+};
+
+export type ServerIconSelection = {
+  iconUrl?: string | null;
+  iconName?: string | null;
+};
+
+export type SaveServerInput = LoginResult & ServerIconSelection;
+
+export type ServerIconUpdate = ServerIconSelection & {
+  serverId: string;
 };
 
 export type MediaLibrary = {
@@ -387,6 +403,8 @@ export type ServerForm = {
   username: string;
   password: string;
   useSystemProxy: boolean;
+  iconUrl: string;
+  iconName: string;
 };
 
 export const emptyForm: ServerForm = {
@@ -396,4 +414,6 @@ export const emptyForm: ServerForm = {
   username: "",
   password: "",
   useSystemProxy: true,
+  iconUrl: "",
+  iconName: "",
 };
