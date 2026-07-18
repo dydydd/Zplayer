@@ -127,23 +127,28 @@ pub(crate) fn report_playback_progress(
         "CanSeek": true
     });
     retry_playback_report(PLAYBACK_REPORT_RETRIES, PLAYBACK_REPORT_RETRY_DELAY, || {
-        let mut reports = vec![
-            (
-                "Sessions/Playing/Progress",
-                post_to_server(client, server, "Sessions/Playing/Progress", &body),
-            ),
-            (
-                "Users/{UserId}/PlayingItems/{Id}/Progress",
-                report_emby_playback_progress(client, server, input),
-            ),
-        ];
-        if let Some(ticks) = positive_ticks(input.position_ticks) {
-            reports.push((
-                "UserItems/{itemId}/UserData",
-                update_playback_position(client, server, &input.item_id, ticks),
-            ));
+        let result = playback_report_result(
+            "playback progress",
+            vec![
+                (
+                    "Sessions/Playing/Progress",
+                    post_to_server(client, server, "Sessions/Playing/Progress", &body),
+                ),
+                (
+                    "Users/{UserId}/PlayingItems/{Id}/Progress",
+                    report_emby_playback_progress(client, server, input),
+                ),
+            ],
+        );
+        if result.is_ok() {
+            update_playback_position_best_effort(
+                client,
+                server,
+                &input.item_id,
+                input.position_ticks,
+            );
         }
-        playback_report_result("playback progress", reports)
+        result
     })
 }
 
@@ -160,24 +165,42 @@ pub(crate) fn report_playback_stopped(
         "Failed": input.failed
     });
     retry_playback_report(PLAYBACK_REPORT_RETRIES, PLAYBACK_REPORT_RETRY_DELAY, || {
-        let mut reports = vec![
-            (
-                "Sessions/Playing/Stopped",
-                post_to_server(client, server, "Sessions/Playing/Stopped", &body),
-            ),
-            (
-                "Users/{UserId}/PlayingItems/{Id}",
-                report_emby_playback_stopped(client, server, input),
-            ),
-        ];
-        if let Some(ticks) = positive_ticks(input.position_ticks) {
-            reports.push((
-                "UserItems/{itemId}/UserData",
-                update_playback_position(client, server, &input.item_id, ticks),
-            ));
+        let result = playback_report_result(
+            "playback stopped",
+            vec![
+                (
+                    "Sessions/Playing/Stopped",
+                    post_to_server(client, server, "Sessions/Playing/Stopped", &body),
+                ),
+                (
+                    "Users/{UserId}/PlayingItems/{Id}",
+                    report_emby_playback_stopped(client, server, input),
+                ),
+            ],
+        );
+        if result.is_ok() {
+            update_playback_position_best_effort(
+                client,
+                server,
+                &input.item_id,
+                input.position_ticks,
+            );
         }
-        playback_report_result("playback stopped", reports)
+        result
     })
+}
+
+// Updating UserData is not a playback session report; keep it best-effort so it
+// cannot mask failures from the real playback reporting endpoints.
+fn update_playback_position_best_effort(
+    client: &Client,
+    server: &SavedServer,
+    item_id: &str,
+    position_ticks: Option<i64>,
+) {
+    if let Some(ticks) = positive_ticks(position_ticks) {
+        let _ = update_playback_position(client, server, item_id, ticks);
+    }
 }
 
 fn report_emby_playback_start(
