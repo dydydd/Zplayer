@@ -86,21 +86,6 @@ fn response_preview(body: &str) -> String {
         .join(" ")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn response_preview_collapses_whitespace_and_limits_body() {
-        let body = format!("  <html>\n  {}\n  </html>", "x".repeat(300));
-        let preview = response_preview(&body);
-
-        assert!(!preview.contains('\n'));
-        assert!(preview.starts_with("<html>"));
-        assert!(preview.len() <= 240);
-    }
-}
-
 pub(crate) fn build_url(
     base_url: &str,
     path: &str,
@@ -214,4 +199,19 @@ pub(crate) fn delete_from_server_with_params(
     let status = response.status();
     let text = response.text().unwrap_or_default();
     Err(format!("{path} returned HTTP {status}: {text}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_preview_collapses_whitespace_and_limits_body() {
+        let body = format!("  <html>\n  {}\n  </html>", "x".repeat(300));
+        let preview = response_preview(&body);
+
+        assert!(!preview.contains('\n'));
+        assert!(preview.starts_with("<html>"));
+        assert!(preview.len() <= 240);
+    }
 }

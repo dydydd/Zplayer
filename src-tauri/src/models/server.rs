@@ -289,7 +289,7 @@ pub(crate) fn normalize_settings(input: SaveSettingsInput) -> AppSettings {
 fn normalize_server_icon_catalog_urls(value: Option<String>) -> String {
     match value {
         Some(value) => value
-            .split(|character| character == '\n' || character == ',' || character == '，')
+            .split(['\n', ',', '，'])
             .map(str::trim)
             .filter(|url| !url.is_empty())
             .collect::<Vec<_>>()
