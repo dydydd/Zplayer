@@ -151,7 +151,7 @@ jobs:
         run: rm -rf libmpv/windows-x86_64 libmpv/macos-universal
 
       - name: Bundle Linux libmpv runtime dependencies
-        run: libmpv/bundle-linux-runtime.sh
+        run: libmpv/bundle-linux-runtime.sh "libmpv/linux-x86_64" "$(dpkg -L libmpv2 | grep -m1 'libmpv\.so\.2$')"
 
       - name: Stamp app version
         env:
