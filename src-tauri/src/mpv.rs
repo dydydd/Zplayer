@@ -367,7 +367,9 @@ fn open_linux_global_library(path: &Path) -> Result<Library, libloading::Error> 
 }
 
 #[cfg(target_os = "windows")]
-fn preload_windows_sibling_libraries(path: &Path) -> Result<Vec<libloading::os::windows::Library>, String> {
+fn preload_windows_sibling_libraries(
+    path: &Path,
+) -> Result<Vec<libloading::os::windows::Library>, String> {
     let Some(dir) = path.parent() else {
         return Ok(Vec::new());
     };

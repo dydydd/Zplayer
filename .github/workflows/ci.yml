@@ -144,6 +144,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Fetch libmpv runtime
+        run: npm run fetch:libmpv
+
       - name: Keep Linux libmpv resources
         run: rm -rf libmpv/windows-x86_64 libmpv/macos-universal
 
@@ -223,6 +226,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install 7-Zip
+        run: choco install 7zip -y
+
+      - name: Fetch libmpv runtime
+        run: npm run fetch:libmpv
+
       - name: Keep Windows libmpv resources
         run: Remove-Item -Recurse -Force libmpv\linux-x86_64, libmpv\macos-universal -ErrorAction SilentlyContinue
 
@@ -286,6 +295,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Fetch libmpv runtime
+        run: npm run fetch:libmpv
 
       - name: Keep macOS libmpv resources
         run: rm -rf libmpv/windows-x86_64 libmpv/linux-x86_64
