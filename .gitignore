@@ -23,3 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# libmpv runtime binaries are fetched at build time (scripts/fetch-libmpv.mjs / CI).
+# Keep the docs and helper scripts tracked; ignore the actual binaries.
+libmpv/windows-x86_64/*.dll
+libmpv/linux-x86_64/*.so*
+libmpv/macos-universal/**

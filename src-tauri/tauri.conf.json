@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.li.zplayer",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run fetch:libmpv && npm run dev",
     "devUrl": "http://localhost:5175",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run fetch:libmpv && npm run build",
     "frontendDist": "../dist"
   },
   "app": {

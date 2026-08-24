@@ -157,6 +157,8 @@ struct MpvApi {
     _library: Library,
     #[cfg(target_os = "linux")]
     _sibling_libraries: Vec<Library>,
+    #[cfg(target_os = "windows")]
+    _sibling_libraries: Vec<libloading::os::windows::Library>,
     library_path: PathBuf,
     mpv_create: MpvCreate,
     mpv_initialize: MpvInitialize,
@@ -181,7 +183,19 @@ impl MpvApi {
         #[cfg(target_os = "linux")]
         let library = open_linux_global_library(path)
             .map_err(|err| format!("Failed to load libmpv from {}: {err}", path.display()))?;
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "windows")]
+        let sibling_libraries = preload_windows_sibling_libraries(path)?;
+        #[cfg(target_os = "windows")]
+        let library = {
+            use libloading::os::windows::{Library as OsLibrary, LOAD_WITH_ALTERED_SEARCH_PATH};
+            let os = unsafe {
+                OsLibrary::load_with_flags(path, LOAD_WITH_ALTERED_SEARCH_PATH).map_err(|err| {
+                    format!("Failed to load libmpv from {}: {err}", path.display())
+                })?
+            };
+            libloading::Library::from(os)
+        };
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         let library = Library::new(path)
             .map_err(|err| format!("Failed to load libmpv from {}: {err}", path.display()))?;
         let mpv_create = *library
@@ -232,6 +246,8 @@ impl MpvApi {
         let api = Self {
             _library: library,
             #[cfg(target_os = "linux")]
+            _sibling_libraries: sibling_libraries,
+            #[cfg(target_os = "windows")]
             _sibling_libraries: sibling_libraries,
             library_path: path.to_path_buf(),
             mpv_create,
@@ -348,6 +364,68 @@ fn linux_sibling_library_name(name: &str) -> bool {
 fn open_linux_global_library(path: &Path) -> Result<Library, libloading::Error> {
     let flags = libloading::os::unix::RTLD_NOW | libloading::os::unix::RTLD_GLOBAL;
     unsafe { libloading::os::unix::Library::open(Some(path), flags).map(Library::from) }
+}
+
+#[cfg(target_os = "windows")]
+fn preload_windows_sibling_libraries(path: &Path) -> Result<Vec<libloading::os::windows::Library>, String> {
+    let Some(dir) = path.parent() else {
+        return Ok(Vec::new());
+    };
+    if dir.as_os_str().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut remaining = fs::read_dir(dir)
+        .map_err(|err| format!("Failed to inspect bundled libmpv directory: {err}"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|candidate| windows_sibling_library_candidate(candidate, path))
+        .collect::<Vec<_>>();
+    remaining.sort();
+
+    let mut loaded = Vec::new();
+    while !remaining.is_empty() {
+        let mut next_remaining = Vec::new();
+        let mut loaded_any = false;
+        for candidate in remaining {
+            match load_windows_library(&candidate) {
+                Ok(library) => {
+                    loaded.push(library);
+                    loaded_any = true;
+                }
+                Err(_) => next_remaining.push(candidate),
+            }
+        }
+
+        if !loaded_any {
+            break;
+        }
+        if next_remaining.len() == remaining.len() {
+            break;
+        }
+        remaining = next_remaining;
+    }
+
+    Ok(loaded)
+}
+
+#[cfg(target_os = "windows")]
+fn load_windows_library(path: &Path) -> Result<libloading::os::windows::Library, String> {
+    use libloading::os::windows::LOAD_WITH_ALTERED_SEARCH_PATH;
+    unsafe {
+        libloading::os::windows::Library::load_with_flags(path, LOAD_WITH_ALTERED_SEARCH_PATH)
+            .map_err(|err| format!("Failed to preload {}: {err}", path.display()))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_sibling_library_candidate(candidate: &Path, primary: &Path) -> bool {
+    if candidate == primary || !candidate.is_file() {
+        return false;
+    }
+    candidate
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".dll") && !name.eq_ignore_ascii_case("libmpv-2.dll"))
 }
 
 fn render_api_abi_values() -> [c_int; 6] {
