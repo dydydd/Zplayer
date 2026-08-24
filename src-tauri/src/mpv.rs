@@ -401,9 +401,6 @@ fn preload_windows_sibling_libraries(
         if !loaded_any {
             break;
         }
-        if next_remaining.len() == remaining.len() {
-            break;
-        }
         remaining = next_remaining;
     }
 
