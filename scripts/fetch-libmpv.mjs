@@ -107,12 +107,6 @@ function extract7z(archive, outDir) {
   execFileSync(sevenZip, ["x", "-y", `-o${outDir}`, archive], { stdio: "inherit" });
 }
 
-function extractTar(archive, outDir) {
-  console.log("fetch-libmpmpv: extracting tar archive");
-  mkdirSync(outDir, { recursive: true });
-  execFileSync("tar", ["-xzf", archive, "-C", outDir], { stdio: "inherit" });
-}
-
 function copyDlls(fromDir, toDir) {
   mkdirSync(toDir, { recursive: true });
   let count = 0;
@@ -126,29 +120,6 @@ function copyDlls(fromDir, toDir) {
     }
   }
   return count;
-}
-
-function copyTree(fromDir, toDir) {
-  mkdirSync(toDir, { recursive: true });
-  let count = 0;
-  for (const entry of readdirSync(fromDir, { withFileTypes: true })) {
-    const full = join(fromDir, entry.name);
-    const target = join(toDir, entry.name);
-    if (entry.isDirectory()) {
-      count += copyTree(full, target);
-    } else {
-      copyFileSync(full, target);
-      count++;
-    }
-  }
-  return count;
-}
-
-function pickSingleTopLevelDir(extractDir) {
-  const dirs = readdirSync(extractDir, { withFileTypes: true }).filter((e) =>
-    e.isDirectory()
-  );
-  return dirs.length === 1 ? join(extractDir, dirs[0].name) : extractDir;
 }
 
 async function run() {
@@ -203,10 +174,17 @@ async function run() {
     const copied = copyDlls(extractDir, destDir);
     console.log(`fetch-libmpv: copied ${copied} DLL(s) into ${destDir}`);
   } else if (config.kind === "tar-xcframework") {
-    extractTar(archive, extractDir);
-    const root = pickSingleTopLevelDir(extractDir);
-    const copied = copyTree(root, destDir);
-    console.log(`fetch-libmpv: copied ${copied} file(s) into ${destDir}`);
+    // Extract directly into the destination, dropping the archive's single top
+    // level directory. `tar` recreates the framework symlinks (e.g.
+    // Foo.framework/Resources -> Versions/A/Resources), which a manual file
+    // copy cannot do.
+    mkdirSync(destDir, { recursive: true });
+    execFileSync(
+      "tar",
+      ["-xzf", archive, "-C", destDir, "--strip-components=1"],
+      { stdio: "inherit" }
+    );
+    console.log(`fetch-libmpv: extracted xcframeworks into ${destDir}`);
   }
 
   console.log("fetch-libmpv: done.");
