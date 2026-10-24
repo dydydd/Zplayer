@@ -1,0 +1,176 @@
+use crate::models::{
+    MediaArt, MediaItem, MediaLibrary, MediaPerson, MediaVersion, SavedServerSummary,
+};
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HomePayload {
+    pub(crate) server: SavedServerSummary,
+    pub(crate) libraries: Vec<MediaLibrary>,
+    pub(crate) library_latest: Vec<LibraryLatestPayload>,
+    pub(crate) latest: Vec<MediaItem>,
+    pub(crate) recommended_movies: Vec<MediaItem>,
+    pub(crate) recommended_shows: Vec<MediaItem>,
+    pub(crate) resume_items: Vec<MediaItem>,
+    pub(crate) favorite_items: Vec<MediaItem>,
+    pub(crate) recent_items: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HomeMorePayload {
+    pub(crate) server_id: String,
+    pub(crate) library_latest: Vec<LibraryLatestPayload>,
+    pub(crate) recommended_movies: Vec<MediaItem>,
+    pub(crate) recommended_shows: Vec<MediaItem>,
+    pub(crate) resume_items: Vec<MediaItem>,
+    pub(crate) favorite_items: Vec<MediaItem>,
+    pub(crate) recent_items: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarPayload {
+    pub(crate) server: SavedServerSummary,
+    pub(crate) tmdb_configured: bool,
+    pub(crate) series_scanned: usize,
+    pub(crate) series_with_tmdb_id: usize,
+    pub(crate) days: Vec<WatchCalendarDay>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarDay {
+    pub(crate) date: String,
+    pub(crate) episodes: Vec<WatchCalendarEpisode>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WatchCalendarEpisode {
+    pub(crate) id: String,
+    pub(crate) server_series_id: String,
+    pub(crate) tmdb_series_id: i64,
+    pub(crate) series_name: String,
+    pub(crate) episode_name: String,
+    pub(crate) overview: Option<String>,
+    pub(crate) air_date: String,
+    pub(crate) season_number: Option<i64>,
+    pub(crate) episode_number: Option<i64>,
+    pub(crate) still_url: Option<String>,
+    pub(crate) poster_url: Option<String>,
+    pub(crate) backdrop_url: Option<String>,
+    pub(crate) vote_average: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SearchPayload {
+    pub(crate) items: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LibraryPayload {
+    pub(crate) library: MediaLibrary,
+    pub(crate) items: Vec<MediaItem>,
+    pub(crate) total_count: usize,
+    pub(crate) start_index: usize,
+    pub(crate) limit: usize,
+    pub(crate) has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EpisodesPayload {
+    pub(crate) series_id: String,
+    pub(crate) season_id: Option<String>,
+    pub(crate) items: Vec<MediaItem>,
+    pub(crate) total_count: usize,
+    pub(crate) start_index: usize,
+    pub(crate) limit: usize,
+    pub(crate) has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LibraryLatestPayload {
+    pub(crate) library: MediaLibrary,
+    pub(crate) items: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ItemDetailPayload {
+    pub(crate) item: MediaItem,
+    pub(crate) children: Vec<MediaItem>,
+    pub(crate) seasons: Vec<MediaItem>,
+    pub(crate) episodes: Vec<MediaItem>,
+    pub(crate) episode_total_count: Option<usize>,
+    pub(crate) media_sources: Vec<MediaVersion>,
+    pub(crate) people: Vec<MediaPerson>,
+    pub(crate) art: Vec<MediaArt>,
+    pub(crate) similar: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ItemMorePayload {
+    pub(crate) item_id: String,
+    pub(crate) people: Vec<MediaPerson>,
+    pub(crate) art: Vec<MediaArt>,
+    pub(crate) similar: Vec<MediaItem>,
+}
+
+/// 人物页数据：人物条目 + 出演作品（`LibraryService::person_page`）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PersonPayload {
+    pub(crate) person: MediaItem,
+    pub(crate) filmography: Vec<MediaItem>,
+}
+
+/// 媒体库浏览页的一页数据（`LibraryService::library_page`）。
+///
+/// `library_id` 用于回写时校验结果仍属于当前选中的库（用户可能已经切库）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LibraryBrowsePayload {
+    pub(crate) library_id: String,
+    pub(crate) library_name: String,
+    pub(crate) items: Vec<MediaItem>,
+    pub(crate) total_count: u64,
+    pub(crate) start_index: u64,
+    pub(crate) has_more: bool,
+}
+
+/// 播放历史页的一页数据（`LibraryService::played_history_page`）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlayedHistoryPayload {
+    pub(crate) items: Vec<MediaItem>,
+    pub(crate) total_count: u64,
+    pub(crate) start_index: u64,
+    pub(crate) has_more: bool,
+}
+
+/// 收藏页数据（`LibraryService::favorites`）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FavoritesPayload {
+    pub(crate) items: Vec<MediaItem>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlayResult {
+    pub(crate) item_id: String,
+    pub(crate) server_id: String,
+    pub(crate) server_name: String,
+    pub(crate) media_source_id: Option<String>,
+    pub(crate) play_session_id: String,
+    pub(crate) url: String,
+    pub(crate) log_path: String,
+    pub(crate) log_tail: String,
+}

@@ -1,0 +1,20 @@
+mod cards;
+mod components;
+mod data;
+mod detail;
+mod favorites;
+mod history;
+mod home;
+mod images;
+mod library;
+mod navigation;
+mod person;
+mod playback;
+mod player;
+mod render;
+mod search;
+mod servers;
+mod settings;
+mod state;
+
+pub(crate) use state::MainView;
