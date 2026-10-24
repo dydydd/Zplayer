@@ -1,10 +1,11 @@
-//! Fluent-inspired design tokens for Zplayer.
+//! FluentUI design tokens for Zplayer.
 //!
-//! The palette follows the Windows 11 Fluent aesthetic: layered neutral
-//! surfaces, a single brand accent, hairline strokes, and high-contrast
-//! typography. `ThemeMode` persists as `"Light"` / `"Dark"` / `"Default"`
-//! (case-insensitive); `"Default"` follows the OS appearance and re-resolves
-//! live when the window appearance changes.
+//! The palette is aligned to the official microsoft/fluentui token values
+//! (webDarkTheme / webLightTheme): layered neutral surfaces, a single brand
+//! accent, hairline strokes, and high-contrast typography. `ThemeMode`
+//! persists as `"Light"` / `"Dark"` / `"Default"` (case-insensitive);
+//! `"Default"` follows the OS appearance and re-resolves live when the
+//! window appearance changes.
 
 use gpui_kit::{Rgba, WindowAppearance, rgb, rgba};
 
@@ -47,45 +48,71 @@ pub(crate) struct ThemeColors {
 }
 
 impl ThemeColors {
-    /// Dark palette: layered charcoal surfaces with the Zplayer green accent.
+    /// Dark palette (webDarkTheme actual values): layered neutral surfaces
+    /// with the Zplayer green accent.
     pub(crate) fn dark() -> Self {
         Self {
-            bg_sidebar: rgb(0x252526),
-            bg_main: rgb(0x1E1E20),
-            bg_header: rgb(0x232325),
-            bg_card: rgb(0x2B2B2D),
-            bg_card_hover: rgb(0x343436),
-            bg_control: rgb(0x2E2E30),
-            bg_control_hover: rgb(0x38383A),
+            // colorNeutralBackground3 (grey8).
+            bg_sidebar: rgb(0x141414),
+            // colorNeutralBackground2 (grey12).
+            bg_main: rgb(0x1F1F1F),
+            bg_header: rgb(0x1F1F1F),
+            // colorNeutralCardBackground (grey20).
+            bg_card: rgb(0x333333),
+            // colorNeutralCardBackgroundHover (grey24).
+            bg_card_hover: rgb(0x3D3D3D),
+            // colorNeutralBackground1 (grey16) — control/input surface.
+            bg_control: rgb(0x292929),
+            // colorNeutralBackground1Hover (grey24).
+            bg_control_hover: rgb(0x3D3D3D),
+            // colorNeutralForeground1.
             text_primary: rgb(0xFFFFFF),
-            text_secondary: rgb(0xA6A6A6),
+            // colorNeutralForeground3 (grey68).
+            text_secondary: rgb(0xADADAD),
+            // colorBrandBackground (Zplayer green, not MS blue).
             accent: rgb(0x4CC38A),
             accent_hover: rgb(0x5CD39A),
             accent_pressed: rgb(0x3CB37A),
+            // Dark ink on the bright green reads better than white.
             accent_text_on: rgb(0x0C1512),
-            border: rgb(0x3D3D3F),
+            // colorNeutralStroke1 (dark stroke ≈ grey33).
+            border: rgb(0x525252),
+            // colorStatusDangerForeground1 (bright step for dark).
             danger: rgb(0xE5484D),
             scrim: rgba(0x000000B3),
         }
     }
 
-    /// Light palette: warm neutral surfaces with a deeper accent for contrast.
+    /// Light palette (webLightTheme actual values): neutral surfaces with a
+    /// deeper accent for contrast.
     pub(crate) fn light() -> Self {
         Self {
-            bg_sidebar: rgb(0xECECEC),
-            bg_main: rgb(0xF4F4F4),
-            bg_header: rgb(0xEFEFEF),
-            bg_card: rgb(0xFFFFFF),
-            bg_card_hover: rgb(0xF2F2F2),
+            // colorNeutralBackground3 (grey96).
+            bg_sidebar: rgb(0xF0F0F0),
+            // colorNeutralBackground2 (grey98).
+            bg_main: rgb(0xFAFAFA),
+            bg_header: rgb(0xFAFAFA),
+            // colorNeutralCardBackground (grey98).
+            bg_card: rgb(0xFAFAFA),
+            // colorNeutralCardBackgroundHover.
+            bg_card_hover: rgb(0xFFFFFF),
+            // colorNeutralBackground1.
             bg_control: rgb(0xFFFFFF),
-            bg_control_hover: rgb(0xEDEDED),
-            text_primary: rgb(0x1A1A1A),
+            // colorNeutralBackground1Hover (grey96).
+            bg_control_hover: rgb(0xF5F5F5),
+            // colorNeutralForeground1 (grey14).
+            text_primary: rgb(0x242424),
+            // colorNeutralForeground3 (grey38).
             text_secondary: rgb(0x616161),
+            // colorBrandBackground (deep green for contrast).
             accent: rgb(0x2E9E6B),
             accent_hover: rgb(0x279061),
             accent_pressed: rgb(0x218256),
+            // colorNeutralForegroundOnBrand.
             accent_text_on: rgb(0xFFFFFF),
-            border: rgb(0xE0E0E0),
+            // colorNeutralStroke1 (grey82).
+            border: rgb(0xD1D1D1),
+            // colorStatusDangerForeground1 (dark cranberry bright step).
             danger: rgb(0xD13438),
             scrim: rgba(0x00000099),
         }
@@ -159,6 +186,65 @@ pub(crate) fn is_dark_appearance(appearance: WindowAppearance) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dark_palette_matches_fluentui_token_values() {
+        let dark = ThemeColors::dark();
+        // colorNeutralBackground2 / 3.
+        assert_eq!(dark.bg_main, rgb(0x1F1F1F));
+        assert_eq!(dark.bg_sidebar, rgb(0x141414));
+        assert_eq!(dark.bg_header, rgb(0x1F1F1F));
+        // colorNeutralCardBackground / Hover.
+        assert_eq!(dark.bg_card, rgb(0x333333));
+        assert_eq!(dark.bg_card_hover, rgb(0x3D3D3D));
+        // colorNeutralBackground1 / Hover (control surface).
+        assert_eq!(dark.bg_control, rgb(0x292929));
+        assert_eq!(dark.bg_control_hover, rgb(0x3D3D3D));
+        // colorNeutralForeground1 / 3.
+        assert_eq!(dark.text_primary, rgb(0xFFFFFF));
+        assert_eq!(dark.text_secondary, rgb(0xADADAD));
+        // colorNeutralStroke1.
+        assert_eq!(dark.border, rgb(0x525252));
+        // colorStatusDangerForeground1 (bright step).
+        assert_eq!(dark.danger, rgb(0xE5484D));
+        // Zplayer brand green family.
+        assert_eq!(dark.accent, rgb(0x4CC38A));
+        assert_eq!(dark.accent_hover, rgb(0x5CD39A));
+        assert_eq!(dark.accent_pressed, rgb(0x3CB37A));
+        assert_eq!(dark.accent_text_on, rgb(0x0C1512));
+        // 70% black scrim.
+        assert_eq!(dark.scrim, rgba(0x000000B3));
+    }
+
+    #[test]
+    fn light_palette_matches_fluentui_token_values() {
+        let light = ThemeColors::light();
+        // colorNeutralBackground2 / 3.
+        assert_eq!(light.bg_main, rgb(0xFAFAFA));
+        assert_eq!(light.bg_sidebar, rgb(0xF0F0F0));
+        assert_eq!(light.bg_header, rgb(0xFAFAFA));
+        // colorNeutralCardBackground / Hover.
+        assert_eq!(light.bg_card, rgb(0xFAFAFA));
+        assert_eq!(light.bg_card_hover, rgb(0xFFFFFF));
+        // colorNeutralBackground1 / Hover.
+        assert_eq!(light.bg_control, rgb(0xFFFFFF));
+        assert_eq!(light.bg_control_hover, rgb(0xF5F5F5));
+        // colorNeutralForeground1 / 3.
+        assert_eq!(light.text_primary, rgb(0x242424));
+        assert_eq!(light.text_secondary, rgb(0x616161));
+        // colorNeutralStroke1.
+        assert_eq!(light.border, rgb(0xD1D1D1));
+        // colorStatusDangerForeground1.
+        assert_eq!(light.danger, rgb(0xD13438));
+        // Zplayer brand green family (deep for contrast).
+        assert_eq!(light.accent, rgb(0x2E9E6B));
+        assert_eq!(light.accent_hover, rgb(0x279061));
+        assert_eq!(light.accent_pressed, rgb(0x218256));
+        // colorNeutralForegroundOnBrand.
+        assert_eq!(light.accent_text_on, rgb(0xFFFFFF));
+        // 60% black scrim.
+        assert_eq!(light.scrim, rgba(0x00000099));
+    }
 
     #[test]
     fn persisted_theme_is_parsed_case_insensitively() {

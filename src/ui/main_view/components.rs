@@ -6,9 +6,11 @@
 //! 保持一致（`Fn(&ClickEvent, &mut Window, &mut App)`），调用方用
 //! `cx.listener(...)` 生成，闭包内只捕获 `Entity` 与 `Copy` 数据。
 //!
-//! 尺寸约定（Windows 11 Fluent）：卡片圆角 8px / 内边距 16px；按钮圆角
-//! 6px / 高 36px / 水平内边距 16px；胶囊全圆角 / 高 32px / 水平内边距
-//! 12px；图标按钮 40×40。
+//! 尺寸约定（FluentUI v9 组件规范，值见 `docs/fluent-tokens.md`）：卡片
+//! 圆角 8px（borderRadiusLarge）/ 内边距 16px（spacingHorizontalL）；按钮
+//! 高 32px（v9 compact）/ 圆角 4px（borderRadiusMedium）/ 水平内边距
+//! 12px（spacingHorizontalM）/ 字号 14（Base300）；胶囊全圆角 / 高 28px /
+//! 水平内边距 12px；图标按钮 36×36（v9 icon button compact）。
 //!
 //! 媒体卡片（海报卡 / 横版卡 / 续看卡 / 横向滚动行）由 `cards.rs` 提供。
 //! 旧组件（`error_banner` / `page_error_banner` / `status_note` /
@@ -23,22 +25,36 @@ use gpui_kit::{
     px, prelude::*,
 };
 
-/// 按钮高度（36 逻辑 px）。
-const BUTTON_HEIGHT: f32 = 36.0;
-/// 按钮水平内边距（16 逻辑 px）。
-const BUTTON_PADDING_X: f32 = 16.0;
-/// 胶囊高度（32 逻辑 px）。
-const PILL_HEIGHT: f32 = 32.0;
-/// 胶囊水平内边距（12 逻辑 px）。
-const PILL_PADDING_X: f32 = 12.0;
-/// 图标按钮边长（40 逻辑 px）。
-const ICON_BUTTON_SIZE: f32 = 40.0;
-/// 空状态图标区直径（64 逻辑 px）。
-const EMPTY_ICON_SIZE: f32 = 64.0;
-/// 空状态图标字号（32 逻辑 px）。
-const EMPTY_ICON_GLYPH_SIZE: f32 = 32.0;
-/// 空状态描述最大宽度（360 逻辑 px），避免长描述一行拉满。
-const EMPTY_DESCRIPTION_MAX_WIDTH: f32 = 360.0;
+/// spacingHorizontalXS（4 逻辑 px）：紧凑间隙。
+pub(crate) const SPACING_XS: f32 = 4.0;
+/// spacingHorizontalS（8 逻辑 px）：卡片内元素间隙。
+pub(crate) const SPACING_S: f32 = 8.0;
+/// spacingHorizontalM（12 逻辑 px）：列表行内边距 / 按钮水平内边距。
+pub(crate) const SPACING_M: f32 = 12.0;
+/// spacingHorizontalL（16 逻辑 px）：卡片内边距。
+pub(crate) const SPACING_L: f32 = 16.0;
+/// spacingHorizontalXL（20 逻辑 px）：页面区块间距。
+pub(crate) const SPACING_XL: f32 = 20.0;
+
+/// borderRadiusMedium（4 逻辑 px）：按钮 / 输入 / 导航行圆角。
+pub(crate) const RADIUS_SM: f32 = 4.0;
+/// borderRadiusLarge（8 逻辑 px）：卡片圆角。
+pub(crate) const RADIUS_MD: f32 = 8.0;
+/// borderRadiusXLarge（12 逻辑 px）：大面板 / 弹层圆角。
+pub(crate) const RADIUS_LG: f32 = 12.0;
+
+/// 按钮高度（32 逻辑 px，v9 compact）。
+const BUTTON_HEIGHT: f32 = 32.0;
+/// 胶囊高度（28 逻辑 px）。
+const PILL_HEIGHT: f32 = 28.0;
+/// 图标按钮边长（36 逻辑 px，v9 icon button compact）。
+const ICON_BUTTON_SIZE: f32 = 36.0;
+/// 空状态图标区直径（56 逻辑 px）。
+const EMPTY_ICON_SIZE: f32 = 56.0;
+/// 空状态图标字号（28 逻辑 px）。
+const EMPTY_ICON_GLYPH_SIZE: f32 = 28.0;
+/// 空状态描述最大宽度（320 逻辑 px），避免长描述一行拉满。
+const EMPTY_DESCRIPTION_MAX_WIDTH: f32 = 320.0;
 
 /// Fluent 按钮变体。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -51,19 +67,21 @@ pub(crate) enum FluentButtonVariant {
     Subtle,
 }
 
-/// Fluent 卡片容器：卡片底色、8px 圆角、1px 描边、16px 内边距，hover 提亮
-/// 为 `bg_card_hover`。返回 [`Div`] 供调用方继续追加内容。
+/// Fluent 卡片容器：卡片底色、8px 圆角（borderRadiusLarge）、1px 描边
+/// （strokeWidthThin）、16px 内边距（spacingHorizontalL），hover 提亮为
+/// `bg_card_hover`。返回 [`Div`] 供调用方继续追加内容。
 pub(crate) fn fluent_card(theme: ThemeColors) -> Div {
     div()
         .bg(theme.bg_card)
-        .rounded_lg()
+        .rounded(px(RADIUS_MD))
         .border_1()
         .border_color(theme.border)
-        .p_4()
+        .p(px(SPACING_L))
         .hover(move |this| this.bg(theme.bg_card_hover))
 }
 
-/// Fluent 按钮：高 36px、圆角 6px、水平内边距 16px。
+/// Fluent 按钮：高 32px（v9 compact）、圆角 4px（borderRadiusMedium）、
+/// 水平内边距 12px（spacingHorizontalM）、字号 14（Base300）。
 ///
 /// - [`FluentButtonVariant::Accent`]：accent 填充 + 深色文字，hover 用
 ///   `accent_hover`，按下用 `accent_pressed`；
@@ -86,8 +104,8 @@ pub(crate) fn fluent_button(
         .items_center()
         .justify_center()
         .h(px(BUTTON_HEIGHT))
-        .px(px(BUTTON_PADDING_X))
-        .rounded_md()
+        .px(px(SPACING_M))
+        .rounded(px(RADIUS_SM))
         .cursor_pointer()
         .text_sm()
         .on_click(on_click);
@@ -113,10 +131,10 @@ pub(crate) fn fluent_button(
     button.child(SharedString::from(label)).into_any_element()
 }
 
-/// Fluent 胶囊选择器（设置模块条 / 季选择 / 排序条共用）：高 32px、水平
-/// 内边距 12px、全圆角。选中态 accent 填充 + 深色文字（hover 提亮为
-/// `accent_hover`），未选中态 `bg_control` + 主文字色（hover 提亮为
-/// `bg_control_hover`）。
+/// Fluent 胶囊选择器（设置模块条 / 季选择 / 排序条共用）：高 28px、水平
+/// 内边距 12px（spacingHorizontalM）、全圆角。选中态 accent 填充 + 深色文字
+/// （hover 提亮为 `accent_hover`），未选中态 `bg_control` + 主文字色（hover
+/// 提亮为 `bg_control_hover`）。
 pub(crate) fn fluent_pill(
     theme: ThemeColors,
     id: impl Into<ElementId>,
@@ -129,7 +147,7 @@ pub(crate) fn fluent_pill(
         .flex()
         .items_center()
         .h(px(PILL_HEIGHT))
-        .px(px(PILL_PADDING_X))
+        .px(px(SPACING_M))
         .rounded_full()
         .cursor_pointer()
         .text_sm()
@@ -149,9 +167,9 @@ pub(crate) fn fluent_pill(
     pill.child(SharedString::from(label)).into_any_element()
 }
 
-/// Fluent 图标按钮（40×40，Subtle 风格）：文字符号作 glyph，hover 提亮为
-/// `bg_card_hover`。`tooltip` 悬停时以 GPUI 原生 tooltip 浮层显示，同时
-/// 作为无障碍名称暴露。
+/// Fluent 图标按钮（36×36，v9 icon button compact，Subtle 风格）：文字符号
+/// 作 glyph，hover 提亮为 `bg_card_hover`。`tooltip` 悬停时以 GPUI 原生
+/// tooltip 浮层显示，同时作为无障碍名称暴露。
 pub(crate) fn fluent_icon_button(
     theme: ThemeColors,
     id: impl Into<ElementId>,
@@ -166,7 +184,7 @@ pub(crate) fn fluent_icon_button(
         .items_center()
         .justify_center()
         .size(px(ICON_BUTTON_SIZE))
-        .rounded_md()
+        .rounded(px(RADIUS_SM))
         .cursor_pointer()
         .text_lg()
         .text_color(theme.text_primary)
@@ -187,9 +205,10 @@ pub(crate) fn fluent_section_title(theme: ThemeColors, text: &str) -> Div {
         .child(SharedString::from(text))
 }
 
-/// Fluent 空状态：居中的大图标区（64px 圆形控件底 + 32px 符号）+ 标题 +
-/// 描述 + 可选动作按钮。`action` 由调用方用 [`fluent_button`] 构建后传入
-/// （传 `None` 则不显示动作区）。
+/// Fluent 空状态：居中的大图标区（56px 圆形控件底 + 28px 符号）+ 标题
+/// （20px，Base500）+ 描述（14px，Base300，最宽 320px）+ 可选动作按钮。
+/// `action` 由调用方用 [`fluent_button`] 构建后传入（传 `None` 则不显示
+/// 动作区）。
 pub(crate) fn fluent_empty_state(
     theme: ThemeColors,
     icon_glyph: &str,
@@ -202,7 +221,7 @@ pub(crate) fn fluent_empty_state(
         .flex_col()
         .items_center()
         .justify_center()
-        .gap_3()
+        .gap(px(SPACING_M))
         .w_full()
         .py_12()
         .child(
@@ -235,7 +254,9 @@ pub(crate) fn fluent_empty_state(
                 .text_color(theme.text_secondary)
                 .child(SharedString::from(description)),
         )
-        .when_some(action, |this, action| this.mt_2().child(action))
+        .when_some(action, |this, action| {
+            this.mt(px(SPACING_S)).child(action)
+        })
         .into_any_element()
 }
 
@@ -247,12 +268,12 @@ impl MainView {
         div()
             .id("error-banner")
             .w_full()
-            .rounded_lg()
+            .rounded(px(RADIUS_MD))
             .bg(theme.bg_card)
             .border_1()
             .border_color(theme.danger)
-            .px_4()
-            .py_2()
+            .px(px(SPACING_L))
+            .py(px(SPACING_S))
             .text_sm()
             .text_color(theme.danger)
             .child(SharedString::from(message))
@@ -266,7 +287,8 @@ impl MainView {
             .map(|message| self.error_banner(message))
     }
 
-    /// 居中的一行状态提示（加载中 / 空态 / 无更多数据）。
+    /// 居中的一行状态提示（加载中 / 空态 / 无更多数据）：字号 14
+    /// （Base300）的次级文字。
     pub(crate) fn status_note(&self, text: &str) -> AnyElement {
         let theme = self.theme();
         div()
@@ -275,6 +297,7 @@ impl MainView {
             .flex()
             .items_center()
             .justify_center()
+            .text_sm()
             .text_color(theme.text_secondary)
             .child(SharedString::from(text))
             .into_any_element()

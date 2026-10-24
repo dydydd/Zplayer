@@ -5,15 +5,15 @@
 //! 拉取（`MainView::set_favorite_kind`）。布局：分类 pill 行 + `poster_card`
 //! 网格（`flex_wrap`）。内容只借用 `MainView::favorites`。
 
-use super::components::fluent_empty_state;
+use super::components::{SPACING_L, SPACING_S, SPACING_XL, fluent_empty_state};
 use super::state::{FavoriteKind, MainView};
-use gpui_kit::{AnyElement, Context, SharedString, div, prelude::*};
+use gpui_kit::{AnyElement, Context, SharedString, div, px, prelude::*};
 
 impl MainView {
     /// 渲染收藏页。
     pub(crate) fn favorites_content(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme();
-        let mut root = div().w_full().flex().flex_col().gap_5();
+        let mut root = div().w_full().flex().flex_col().gap(px(SPACING_XL));
         if let Some(banner) = self.page_error_banner() {
             root = root.child(banner);
         }
@@ -37,7 +37,7 @@ impl MainView {
                     .w_full()
                     .flex()
                     .flex_wrap()
-                    .gap_4()
+                    .gap(px(SPACING_L))
                     .children(favorites.items.iter().map(|item| self.poster_card(item, cx))),
             );
 
@@ -46,7 +46,7 @@ impl MainView {
 
     /// 分类 pill 行：闭包只捕获 `Copy` 的 `FavoriteKind`。
     fn favorite_kind_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mut row = div().flex().flex_row().items_center().gap_2();
+        let mut row = div().flex().flex_row().items_center().gap(px(SPACING_S));
         for kind in FavoriteKind::ALL {
             let selected = self.favorite_kind == kind;
             row = row.child(self.selectable_pill(

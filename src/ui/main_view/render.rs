@@ -2,11 +2,12 @@
 //! content below. The pane and header themselves live in `navigation.rs`;
 //! page switching state and history live in `state.rs`.
 
+use super::components::SPACING_L;
 use super::state::{MainView, Page};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::{AnyElement, Context, IntoElement, Render, Window};
-use gpui_kit::{div, prelude::*};
+use gpui_kit::{div, px, prelude::*};
 
 impl Render for MainView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -61,11 +62,11 @@ impl MainView {
             Page::Search => div()
                 .flex()
                 .flex_col()
-                .gap_4()
+                .gap(px(SPACING_L))
                 .child(
                     Input::new(&self.search_input)
                         .id("media-search")
-                        .w(gpui_kit::px(420.)),
+                        .w(px(420.)),
                 )
                 .child(self.search_content(cx))
                 .into_any_element(),

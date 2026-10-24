@@ -10,7 +10,10 @@
 //! 内容只借用 `MainView::history`，渲染不复制条目数据。
 
 use super::cards::{CardMetrics, card_ids, landscape_meta};
-use super::components::{FluentButtonVariant, fluent_button, fluent_empty_state};
+use super::components::{
+    FluentButtonVariant, SPACING_L, SPACING_M, SPACING_S, SPACING_XL, SPACING_XS, fluent_button,
+    fluent_empty_state,
+};
 use super::state::MainView;
 use crate::models::MediaItem;
 use gpui_kit::{
@@ -26,7 +29,7 @@ impl MainView {
     /// 渲染播放历史页。
     pub(crate) fn history_content(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme();
-        let mut root = div().w_full().flex().flex_col().gap_5();
+        let mut root = div().w_full().flex().flex_col().gap(px(SPACING_XL));
         if let Some(banner) = self.page_error_banner() {
             root = root.child(banner);
         }
@@ -47,7 +50,7 @@ impl MainView {
                 .w_full()
                 .flex()
                 .flex_col()
-                .gap_2()
+                .gap(px(SPACING_S))
                 .children(history.items.iter().map(|item| self.history_row(item, cx))),
         );
 
@@ -97,7 +100,7 @@ impl MainView {
         let mut info = div()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(SPACING_XS))
             .flex_1()
             .min_w_0()
             .child(
@@ -122,8 +125,8 @@ impl MainView {
             .flex()
             .flex_row()
             .items_center()
-            .gap_4()
-            .p_3()
+            .gap(px(SPACING_L))
+            .p(px(SPACING_M))
             .bg(theme.bg_card)
             .rounded(px(metrics.radius))
             .border_1()

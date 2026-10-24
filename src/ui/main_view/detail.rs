@@ -19,7 +19,10 @@
 //! `person:{id|name}`，剧集缩略图用剧集 id；未命中时触发 `load_image` 并以
 //! 控件底色占位。
 
-use super::components::{FluentButtonVariant, fluent_button, fluent_pill, fluent_section_title};
+use super::components::{
+    FluentButtonVariant, RADIUS_MD, RADIUS_SM, SPACING_L, SPACING_M, SPACING_S, SPACING_XL,
+    SPACING_XS, fluent_button, fluent_pill, fluent_section_title,
+};
 use super::state::MainView;
 use crate::models::{ItemDetailPayload, MediaItem, MediaPerson};
 use crate::ui::theme::on_accent_text;
@@ -37,10 +40,10 @@ const HERO_FADE_RATIO: f32 = 0.4;
 /// 竖版海报尺寸。
 const POSTER_WIDTH: f32 = 120.0;
 const POSTER_HEIGHT: f32 = 180.0;
-/// 卡片圆角。
-const CARD_RADIUS: f32 = 8.0;
-/// 操作行按钮高度（与 Fluent 按钮一致：36 逻辑 px）。
-const ACTION_BUTTON_HEIGHT: f32 = 36.0;
+/// 卡片圆角（borderRadiusLarge）。
+const CARD_RADIUS: f32 = RADIUS_MD;
+/// 操作行按钮高度（与 Fluent 按钮一致：32 逻辑 px，v9 compact）。
+const ACTION_BUTTON_HEIGHT: f32 = 32.0;
 /// 演员圆头像直径。
 const AVATAR_SIZE: f32 = 96.0;
 /// 演员横排最多展示数量，避免一次性触发过多图片请求。
@@ -242,7 +245,7 @@ impl MainView {
         let mut meta_column = div()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap(px(SPACING_S))
             .min_w_0()
             .child(
                 div()
@@ -270,7 +273,7 @@ impl MainView {
             .flex()
             .flex_row()
             .items_end()
-            .gap_4()
+            .gap(px(SPACING_L))
             .child(poster_layer)
             .child(meta_column);
 
@@ -321,10 +324,10 @@ impl MainView {
             .flex()
             .items_center()
             .justify_center()
-            .gap_2()
+            .gap(px(SPACING_S))
             .h(px(ACTION_BUTTON_HEIGHT))
-            .px_4()
-            .rounded_md()
+            .px(px(SPACING_M))
+            .rounded(px(RADIUS_SM))
             .bg(theme.bg_control)
             .border_1()
             .text_sm()
@@ -351,10 +354,10 @@ impl MainView {
             .flex()
             .items_center()
             .justify_center()
-            .gap_2()
+            .gap(px(SPACING_S))
             .h(px(ACTION_BUTTON_HEIGHT))
-            .px_4()
-            .rounded_md()
+            .px(px(SPACING_M))
+            .rounded(px(RADIUS_SM))
             .bg(theme.bg_control)
             .border_1()
             .text_sm()
@@ -379,7 +382,7 @@ impl MainView {
             .flex()
             .flex_row()
             .items_center()
-            .gap_3()
+            .gap(px(SPACING_M))
             .child(play_button)
             .child(favorite_button)
             .child(played_button)
@@ -410,9 +413,9 @@ impl MainView {
         let mut card = div()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(SPACING_M))
             .w_full()
-            .p_5()
+            .p(px(SPACING_XL))
             .bg(theme.bg_card)
             .rounded(px(CARD_RADIUS))
             .border_1()
@@ -454,7 +457,7 @@ impl MainView {
         div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap(px(SPACING_L))
             .w_full()
             .child(fluent_section_title(self.theme, "演员"))
             .child(div().flex().flex_row().overflow_x_scrollbar().children(cards))
@@ -503,10 +506,10 @@ impl MainView {
             .flex()
             .flex_col()
             .items_center()
-            .gap_2()
-            .p_2()
+            .gap(px(SPACING_S))
+            .p(px(SPACING_S))
             .rounded(px(CARD_RADIUS))
-            .mr(px(16.))
+            .mr(px(SPACING_L))
             .child(avatar)
             .child(
                 div()
@@ -553,7 +556,7 @@ impl MainView {
         let mut section = div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap(px(SPACING_L))
             .w_full()
             .child(fluent_section_title(theme, "剧集"));
 
@@ -593,7 +596,7 @@ impl MainView {
                 self.episode_row(episode, index, selected, cx)
             })
             .collect::<Vec<_>>();
-        section = section.child(div().flex().flex_col().gap_2().children(rows));
+        section = section.child(div().flex().flex_col().gap(px(SPACING_S)).children(rows));
 
         if self.season_has_more() {
             section = section.child(fluent_button(
@@ -616,7 +619,7 @@ impl MainView {
         let theme = self.theme;
         // 渲染路径：`Arc<str>` server id 以引用计数形式在所有 pill 间共享。
         let server_id: Arc<str> = Arc::from(detail.item.server_id.as_str());
-        let mut row = div().flex().flex_row().gap_2().overflow_x_scrollbar();
+        let mut row = div().flex().flex_row().gap(px(SPACING_S)).overflow_x_scrollbar();
 
         for season in &detail.seasons {
             let season_id: Arc<str> = Arc::from(season.id.as_str());
@@ -708,7 +711,7 @@ impl MainView {
         let mut meta = div()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(SPACING_XS))
             .flex_1()
             .min_w_0()
             .child(
@@ -734,8 +737,8 @@ impl MainView {
             .flex()
             .flex_row()
             .items_center()
-            .gap_4()
-            .p_3()
+            .gap(px(SPACING_L))
+            .p(px(SPACING_M))
             .bg(theme.bg_card)
             .rounded(px(CARD_RADIUS))
             .border_1()

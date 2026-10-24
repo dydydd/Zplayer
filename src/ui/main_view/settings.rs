@@ -1,11 +1,11 @@
 //! 设置页：7 模块 pill 条 + 每模块内容（常规 / 播放器 / 媒体库 / 外部服务 /
 //! AI / 快捷键 / 关于）。
 
-use super::components::{fluent_card, fluent_pill};
+use super::components::{SPACING_L, SPACING_S, SPACING_XS, fluent_card, fluent_pill};
 use super::state::MainView;
 use crate::ui::theme::{ThemeMode, is_dark_appearance};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::{AnyElement, Context, FontWeight, SharedString, div, prelude::*};
+use gpui_kit::{AnyElement, Context, FontWeight, SharedString, div, px, prelude::*};
 
 /// 设置模块（pill 条中的 7 个模块）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -74,7 +74,7 @@ impl MainView {
         let theme = self.theme();
         let selected = self.settings_module;
 
-        let mut strip = div().flex().gap_2().overflow_x_scrollbar();
+        let mut strip = div().flex().gap(px(SPACING_S)).overflow_x_scrollbar();
         for module in SettingsModule::all() {
             let active = module == selected;
             let pill = fluent_pill(
@@ -105,7 +105,7 @@ impl MainView {
         div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap(px(SPACING_L))
             .child(self.settings_card(
                 "主题",
                 "选择应用的配色主题",
@@ -128,7 +128,7 @@ impl MainView {
     /// 应用并持久化。
     fn theme_picker(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme();
-        let mut row = div().flex().flex_row().gap_2();
+        let mut row = div().flex().flex_row().gap(px(SPACING_S));
         for (mode, label) in [
             (ThemeMode::Light, "浅色"),
             (ThemeMode::Dark, "深色"),
@@ -157,14 +157,14 @@ impl MainView {
         div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap(px(SPACING_L))
             .child(self.settings_card(
                 "Zplayer",
                 "原生 Rust 媒体客户端",
                 div()
                     .flex()
                     .flex_col()
-                    .gap_2()
+                    .gap(px(SPACING_S))
                     .child(
                         div()
                             .text_sm()
@@ -217,11 +217,11 @@ impl MainView {
         let theme = self.theme();
         fluent_card(theme)
             .flex()
-            .gap_4()
+            .gap(px(SPACING_L))
             .child(
                 div()
                     .flex_col()
-                    .gap_1()
+                    .gap(px(SPACING_XS))
                     .child(
                         div()
                             .text_sm()

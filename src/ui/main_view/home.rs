@@ -6,7 +6,9 @@
 //! 捕获的 `Arc<str>` id 会分配。
 
 use super::cards::{CardMetrics, cover};
-use super::components::{FluentButtonVariant, fluent_button};
+use super::components::{
+    FluentButtonVariant, SPACING_M, SPACING_S, SPACING_XS, fluent_button,
+};
 use super::state::{MainView, Page};
 use crate::models::MediaLibrary;
 use crate::ui::theme::on_accent_text;
@@ -18,8 +20,8 @@ use std::sync::Arc;
 
 /// 媒体库卡底部渐变 scrim 的高度。
 const LIBRARY_SCRIM_HEIGHT: f32 = 56.0;
-/// 空状态图标圆的直径。
-const EMPTY_ICON_SIZE: f32 = 64.0;
+/// 空状态图标圆的直径（与 `fluent_empty_state` 一致：56 逻辑 px）。
+const EMPTY_ICON_SIZE: f32 = 56.0;
 
 impl MainView {
     /// 首页内容：加载提示 → 错误 → 空状态 → 卡片行。
@@ -99,7 +101,7 @@ impl MainView {
             .w(px(metrics.landscape_width))
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(SPACING_XS))
             .cursor_pointer()
             .child(
                 div()
@@ -129,8 +131,8 @@ impl MainView {
                             ))
                             .flex()
                             .items_end()
-                            .px_3()
-                            .pb_2()
+                            .px(px(SPACING_M))
+                            .pb(px(SPACING_S))
                             .child(
                                 div()
                                     .w_full()
@@ -171,7 +173,7 @@ impl MainView {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap_3()
+            .gap(px(SPACING_M))
             .child(
                 // 首页空状态的图标用 accent 圆 + 播放符号。
                 div()
@@ -203,7 +205,7 @@ impl MainView {
     }
 }
 
-/// 居中的一行状态提示（加载 / 错误）。
+/// 居中的一行状态提示（加载 / 错误）：字号 14（Base300）。
 fn centered_hint(text: SharedString, color: Rgba) -> AnyElement {
     div()
         .w_full()
@@ -211,6 +213,7 @@ fn centered_hint(text: SharedString, color: Rgba) -> AnyElement {
         .flex()
         .items_center()
         .justify_center()
+        .text_sm()
         .text_color(color)
         .child(text)
         .into_any_element()

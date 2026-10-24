@@ -4,7 +4,8 @@
 //! 文案与颜色统一走 `self.theme()` 令牌。
 
 use super::components::{
-    FluentButtonVariant, fluent_button, fluent_card, fluent_empty_state, fluent_section_title,
+    FluentButtonVariant, RADIUS_MD, RADIUS_SM, SPACING_L, SPACING_M, SPACING_S, SPACING_XL,
+    SPACING_XS, fluent_button, fluent_card, fluent_empty_state, fluent_section_title,
 };
 use super::state::MainView;
 use crate::models::{LoginInput, SaveServerInput, SavedServerSummary};
@@ -16,10 +17,10 @@ use std::sync::Arc;
 
 /// 表单卡宽度（逻辑 px）。
 const FORM_CARD_WIDTH: f32 = 460.0;
-/// 卡片圆角。
-const CARD_RADIUS: f32 = 8.0;
-/// 按钮高度（与 Fluent 按钮一致：36 逻辑 px）。
-const BUTTON_HEIGHT: f32 = 36.0;
+/// 卡片圆角（borderRadiusLarge）。
+const CARD_RADIUS: f32 = RADIUS_MD;
+/// 按钮高度（与 Fluent 按钮一致：32 逻辑 px，v9 compact）。
+const BUTTON_HEIGHT: f32 = 32.0;
 
 impl MainView {
     pub(crate) fn reload_servers(&mut self) {
@@ -216,7 +217,7 @@ impl MainView {
             root = root
                 .child(fluent_section_title(theme, "已保存的服务器"))
                 .child(
-                    div().flex().flex_col().gap_3().children(
+                    div().flex().flex_col().gap(px(SPACING_M)).children(
                         self.servers
                             .iter()
                             .map(|server| self.server_list_item(server, view.clone())),
@@ -229,14 +230,14 @@ impl MainView {
             .w(px(FORM_CARD_WIDTH))
             .flex()
             .flex_col()
-            .gap_4()
-            .p_5()
+            .gap(px(SPACING_L))
+            .p(px(SPACING_XL))
             .child(fluent_section_title(theme, "添加服务器"))
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_3()
+                    .gap(px(SPACING_M))
                     .child(form_field(
                         theme,
                         "服务器类型",
@@ -332,12 +333,12 @@ impl MainView {
             .id(format!("server-card-{server_id}"))
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(SPACING_M))
             .rounded(px(CARD_RADIUS))
             .bg(theme.bg_card)
             .border_1()
             .border_color(if active { theme.accent } else { theme.border })
-            .p_4()
+            .p(px(SPACING_L))
             .hover(move |this| this.bg(theme.bg_card_hover))
             // 名称 + 状态行
             .child(
@@ -346,7 +347,7 @@ impl MainView {
                     .flex_row()
                     .items_center()
                     .justify_between()
-                    .gap_4()
+                    .gap(px(SPACING_L))
                     .child(
                         div()
                             .text_sm()
@@ -380,7 +381,7 @@ impl MainView {
                 div()
                     .flex()
                     .flex_row()
-                    .gap_2()
+                    .gap(px(SPACING_S))
                     .child(fluent_button(
                         theme,
                         SharedString::from(format!("activate-server-{server_id}")),
@@ -407,7 +408,8 @@ impl MainView {
     }
 }
 
-/// 危险次按钮（删除）：Fluent 次按钮形态 + danger 文字色。
+/// 危险次按钮（删除）：Fluent 次按钮形态（高 32 / 圆角 4 / 水平内边距
+/// 12）+ danger 文字色。
 fn danger_button(
     theme: ThemeColors,
     id: SharedString,
@@ -419,10 +421,10 @@ fn danger_button(
         .flex()
         .items_center()
         .justify_center()
-        .gap_2()
+        .gap(px(SPACING_S))
         .h(px(BUTTON_HEIGHT))
-        .px_4()
-        .rounded_md()
+        .px(px(SPACING_M))
+        .rounded(px(RADIUS_SM))
         .bg(theme.bg_control)
         .border_1()
         .border_color(theme.border)
@@ -445,7 +447,7 @@ fn form_field(
     div()
         .flex()
         .flex_col()
-        .gap_1()
+        .gap(px(SPACING_XS))
         .child(
             div()
                 .text_xs()

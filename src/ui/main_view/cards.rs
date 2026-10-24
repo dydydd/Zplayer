@@ -10,7 +10,7 @@
 //! 通用 Fluent 组件（按钮 / 胶囊 / 空状态 / 区块标题）由 `components.rs`
 //! 提供，本文件只负责媒体卡片本身。
 
-use super::components::fluent_section_title;
+use super::components::{RADIUS_MD, SPACING_M, SPACING_S, SPACING_XS, fluent_section_title};
 use super::state::MainView;
 use crate::models::MediaItem;
 use crate::ui::theme::{ThemeColors, on_accent_text};
@@ -38,13 +38,13 @@ pub(crate) struct CardMetrics {
     pub(crate) landscape_width: f32,
     /// 横版封面高度。
     pub(crate) landscape_height: f32,
-    /// 行内两张卡片的间距。
+    /// 行内两张卡片的间距（spacingHorizontalM）。
     pub(crate) gap: f32,
-    /// 卡片圆角。
+    /// 卡片圆角（borderRadiusLarge）。
     pub(crate) radius: f32,
     /// 封面角标（评分 / 时长 / 数量）的高度。
     pub(crate) badge_height: f32,
-    /// 横版卡底部播放进度条的高度。
+    /// 横版卡底部播放进度条的高度（strokeWidthThin 的倍数）。
     pub(crate) progress_height: f32,
 }
 
@@ -55,10 +55,10 @@ impl CardMetrics {
             poster_height: 240.0,
             landscape_width: 280.0,
             landscape_height: 158.0,
-            gap: 12.0,
-            radius: 8.0,
+            gap: SPACING_M,
+            radius: RADIUS_MD,
             badge_height: 22.0,
-            progress_height: 3.0,
+            progress_height: 2.0,
         }
     }
 }
@@ -117,7 +117,7 @@ fn overlay_chip(text: SharedString, metrics: &CardMetrics) -> AnyElement {
         .h(px(metrics.badge_height))
         .rounded_full()
         .bg(overlay_fill())
-        .px_2()
+        .px(px(SPACING_S))
         .text_xs()
         .text_color(overlay_ink())
         .child(text)
@@ -155,7 +155,7 @@ fn count_slot(item: &MediaItem, metrics: &CardMetrics, theme: ThemeColors) -> Op
                     .h(px(metrics.badge_height))
                     .rounded_full()
                     .bg(theme.accent)
-                    .px_2()
+                    .px(px(SPACING_S))
                     .text_xs()
                     .text_color(on_accent_text())
                     .child(SharedString::from(count_label(remaining))),
@@ -325,9 +325,9 @@ fn poster_scrim(title: SharedString, meta: Option<SharedString>) -> AnyElement {
         .flex()
         .flex_col()
         .justify_end()
-        .gap_1()
-        .px_2()
-        .pb_2()
+        .gap(px(SPACING_XS))
+        .px(px(SPACING_S))
+        .pb(px(SPACING_S))
         .child(
             div()
                 .w_full()
@@ -400,8 +400,8 @@ impl MainView {
             .into_any_element()
     }
 
-    /// 续看卡（横版卡 280×158）：封面 + 角标 + accent 进度条（3px）+ 剩余
-    /// 时长副标题，标题与元信息在封面下方。
+    /// 续看卡（横版卡 280×158）：封面 + 角标 + accent 进度条（2px，
+    /// strokeWidthThin 的倍数）+ 剩余时长副标题，标题与元信息在封面下方。
     pub(crate) fn resume_card(&self, item: &MediaItem, cx: &mut Context<Self>) -> AnyElement {
         let metrics = CardMetrics::standard();
         let theme = self.theme();
@@ -436,7 +436,7 @@ impl MainView {
             .id(SharedString::from(format!("home.resume-card.{item_id}")))
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(SPACING_XS))
             .w(px(metrics.landscape_width))
             .cursor_pointer()
             .child(cover_block)
@@ -477,7 +477,7 @@ impl MainView {
             .w_full()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(SPACING_M))
             .child(fluent_section_title(theme, title))
             .child(
                 div()

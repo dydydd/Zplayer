@@ -9,6 +9,7 @@
 //! 呈现。事件闭包只捕获 `Entity<MainView>` 与 `Copy` 值，从不捕获
 //! `PlayerState` 或 `String`；状态字段（f64 / bool）全部按值直接读取。
 
+use super::components::{RADIUS_SM, SPACING_L, SPACING_M, SPACING_S, SPACING_XL};
 use super::state::{MainView, Page};
 use crate::ui::theme::on_accent_text;
 use gpui_kit::component::slider::Slider;
@@ -23,8 +24,8 @@ const TOP_BAR_HEIGHT: f32 = 64.;
 const PRIMARY_BUTTON_SIZE: f32 = 48.;
 /// 次级控制按钮（跳转、音量、停止）高度。
 const CONTROL_BUTTON_HEIGHT: f32 = 36.;
-/// 空状态图标圆直径。
-const EMPTY_ICON_SIZE: f32 = 64.;
+/// 空状态图标圆直径（与 `fluent_empty_state` 一致：56 逻辑 px）。
+const EMPTY_ICON_SIZE: f32 = 56.;
 /// 音量百分比文本宽度，保证数字变化时控制行不抖动。
 const VOLUME_LABEL_WIDTH: f32 = 44.;
 /// 当前时间的等宽字体族（Windows 自带 Consolas）。
@@ -60,7 +61,7 @@ impl MainView {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap_4()
+            .gap(px(SPACING_L))
             .bg(rgb(SURFACE_BG))
             .child(
                 div()
@@ -76,7 +77,7 @@ impl MainView {
             )
             .child(
                 div()
-                    .text_2xl()
+                    .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(surface_fg())
                     .child("暂无播放内容"),
@@ -88,15 +89,16 @@ impl MainView {
                     .child("从详情页选择影片或剧集开始播放"),
             )
             .child(
-                // 播放面上的次级按钮形态：白色低透明底 + 描边。
+                // 播放面上的次级按钮形态：白色低透明底 + 描边（v9 compact
+                // 规格：高 32 / 圆角 4 / 水平内边距 20）。
                 div()
                     .id("player.empty-back")
                     .flex()
                     .items_center()
                     .justify_center()
                     .h(px(CONTROL_BUTTON_HEIGHT))
-                    .px_5()
-                    .rounded(px(6.))
+                    .px(px(SPACING_XL))
+                    .rounded(px(RADIUS_SM))
                     .bg(surface_hover())
                     .border_1()
                     .border_color(surface_border())
@@ -130,7 +132,7 @@ impl MainView {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap_2()
+            .gap(px(SPACING_S))
             .child(
                 div()
                     .text_2xl()
@@ -156,10 +158,10 @@ impl MainView {
             .left_0()
             .right_0()
             .h(px(TOP_BAR_HEIGHT))
-            .px_4()
+            .px(px(SPACING_L))
             .flex()
             .items_center()
-            .gap_3()
+            .gap(px(SPACING_M))
             // 0° 朝上、顺时针增大：180° 即自上而下，由黑渐隐到透明。
             .bg(linear_gradient(
                 180.,
@@ -212,7 +214,7 @@ impl MainView {
         let progress_row = div()
             .flex()
             .items_center()
-            .gap_3()
+            .gap(px(SPACING_M))
             .child(
                 div()
                     .text_sm()
@@ -249,7 +251,7 @@ impl MainView {
         let control_row = div()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(px(SPACING_S))
             // 播放 / 暂停：主按钮，品牌强调色。
             .child(
                 div()
@@ -338,10 +340,11 @@ impl MainView {
             .bottom_0()
             .left_0()
             .right_0()
-            .p_4()
+            // 控制栏内边距：spacingHorizontalL（16 逻辑 px）。
+            .p(px(SPACING_L))
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(SPACING_M))
             // 半透明黑（80%）。
             .bg(rgba(0x000000CC))
             .child(progress_row)
@@ -408,8 +411,8 @@ fn control_button(
         .items_center()
         .justify_center()
         .h(px(CONTROL_BUTTON_HEIGHT))
-        .px_2()
-        .rounded_md()
+        .px(px(SPACING_S))
+        .rounded(px(RADIUS_SM))
         .cursor_pointer()
         .text_sm()
         .text_color(fg)
@@ -427,8 +430,8 @@ fn placeholder_chip(id: &'static str, label: &'static str) -> AnyElement {
         .items_center()
         .justify_center()
         .h(px(CONTROL_BUTTON_HEIGHT))
-        .px_2()
-        .rounded_md()
+        .px(px(SPACING_S))
+        .rounded(px(RADIUS_SM))
         .text_sm()
         .text_color(surface_fg_muted())
         .child(label)

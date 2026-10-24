@@ -6,6 +6,7 @@
 //! `Entity<MainView>` plus `Copy` data (`Page`, list indices) — never
 //! `String` or `Vec`.
 
+use super::components::{RADIUS_SM, SPACING_L, SPACING_M, SPACING_S, SPACING_XS};
 use super::state::{MainView, Page};
 use crate::models::{MediaLibrary, SavedServerSummary};
 use crate::ui::theme::ThemeColors;
@@ -13,24 +14,24 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::{
     AnyElement, Context, Div, ElementId, Entity, FontWeight, SharedString, Stateful,
 };
-use gpui_kit::{div, prelude::*};
+use gpui_kit::{div, px, prelude::*};
 use std::sync::Arc;
 
 /// Expanded pane width in logical pixels.
 const NAV_PANE_WIDTH: f32 = 260.;
 /// Collapsed icon-column width in logical pixels.
 const NAV_PANE_COLLAPSED_WIDTH: f32 = 48.;
-/// Page header height in logical pixels.
-const HEADER_HEIGHT: f32 = 48.;
-/// Header icon button size.
-const HEADER_BUTTON_SIZE: f32 = 40.;
+/// Page header height in logical pixels (44, v9 density).
+const HEADER_HEIGHT: f32 = 44.;
+/// Header icon button size (36, v9 icon button compact).
+const HEADER_BUTTON_SIZE: f32 = 36.;
 /// Fixed icon slot width so entry labels align in one column.
 const ICON_SLOT_WIDTH: f32 = 20.;
-/// Height of a single navigation entry.
-const NAV_ENTRY_HEIGHT: f32 = 40.;
+/// Height of a single navigation entry (36, v9 nav density).
+const NAV_ENTRY_HEIGHT: f32 = 36.;
 /// Width of the selection indicator pill drawn at a selected entry's left
-/// edge.
-const NAV_INDICATOR_WIDTH: f32 = 3.;
+/// edge (2, strokeWidthThin double).
+const NAV_INDICATOR_WIDTH: f32 = 2.;
 /// Height of the selection indicator pill.
 const NAV_INDICATOR_HEIGHT: f32 = 16.;
 
@@ -67,7 +68,7 @@ impl MainView {
                 .flex()
                 .items_center()
                 .justify_between()
-                .px_4()
+                .px(px(SPACING_L))
                 .w_full()
                 .h(gpui_kit::px(HEADER_HEIGHT))
                 .child(
@@ -89,9 +90,9 @@ impl MainView {
             .id("shell.navigation.bottom")
             .flex()
             .flex_col()
-            .gap_1()
-            .px_2()
-            .py_2()
+            .gap(px(SPACING_XS))
+            .px(px(SPACING_S))
+            .py(px(SPACING_S))
             .mt_auto()
             .border_t_1()
             .border_color(theme.border)
@@ -121,9 +122,9 @@ impl MainView {
                     .overflow_y_scrollbar()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .px_2()
-                    .py_2()
+                    .gap(px(SPACING_XS))
+                    .px(px(SPACING_S))
+                    .py(px(SPACING_S))
                     .child(self.nav_page_entry(
                         "nav.home",
                         "🏠",
@@ -189,8 +190,8 @@ impl MainView {
             .w_full()
             .h(gpui_kit::px(HEADER_HEIGHT))
             .flex_shrink_0()
-            .px_2()
-            .gap_1()
+            .px(px(SPACING_S))
+            .gap(px(SPACING_XS))
             .bg(theme.bg_header)
             .border_b_1()
             .border_color(theme.border);
@@ -205,7 +206,7 @@ impl MainView {
                     .items_center()
                     .justify_center()
                     .size(gpui_kit::px(HEADER_BUTTON_SIZE))
-                    .rounded_md()
+                    .rounded(px(RADIUS_SM))
                     .cursor_pointer()
                     .text_color(theme.text_secondary)
                     .hover(|this| this.bg(theme.bg_card_hover))
@@ -219,7 +220,7 @@ impl MainView {
         header
             .child(
                 div()
-                    .px_2()
+                    .px(px(SPACING_S))
                     .text_lg()
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(self.page_title()),
@@ -259,7 +260,7 @@ impl MainView {
             .items_center()
             .justify_center()
             .size(gpui_kit::px(32.))
-            .rounded_md()
+            .rounded(px(RADIUS_SM))
             .cursor_pointer()
             .text_color(theme.text_secondary)
             .hover(|this| this.bg(theme.bg_card_hover))
@@ -269,7 +270,7 @@ impl MainView {
             .child(glyph)
     }
 
-    /// One Fluent NavView entry row: a 3px selection indicator slot at the
+    /// One Fluent NavView entry row: a 2px selection indicator slot at the
     /// left edge, a fixed icon slot, and the label. Selected entries get the
     /// accent indicator, the card-hover surface, and accent-colored content;
     /// unselected entries use the secondary text color and highlight with
@@ -289,7 +290,7 @@ impl MainView {
             .items_center()
             .w_full()
             .h(gpui_kit::px(NAV_ENTRY_HEIGHT))
-            .rounded_md()
+            .rounded(px(RADIUS_SM))
             .cursor_pointer()
             .when(selected, |this| {
                 this.bg(theme.bg_card_hover).text_color(theme.accent)
@@ -301,8 +302,8 @@ impl MainView {
             row.child(Self::nav_indicator(selected, theme))
                 .child(div().flex_1().flex().justify_center().child(icon))
         } else {
-            row.gap_2()
-                .pr_3()
+            row.gap(px(SPACING_S))
+                .pr(px(SPACING_M))
                 .child(Self::nav_indicator(selected, theme))
                 .child(
                     div()
@@ -315,7 +316,7 @@ impl MainView {
         }
     }
 
-    /// Fluent selection indicator: a 3px accent pill flush with the entry's
+    /// Fluent selection indicator: a 2px accent pill flush with the entry's
     /// left edge. Unselected entries keep the slot as an invisible spacer so
     /// every label aligns in one column.
     fn nav_indicator(selected: bool, theme: ThemeColors) -> Div {
@@ -362,12 +363,12 @@ impl MainView {
             return div().into_any_element();
         }
 
-        let mut group = div().flex().flex_col().gap_1();
+        let mut group = div().flex().flex_col().gap(px(SPACING_XS));
         if !collapsed {
             group = group.child(
                 div()
-                    .px_3()
-                    .pt_2()
+                    .px(px(SPACING_M))
+                    .pt(px(SPACING_S))
                     .text_xs()
                     .text_color(theme.text_secondary)
                     .child("媒体库"),
@@ -425,7 +426,7 @@ impl MainView {
         div()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(SPACING_XS))
             .children(entries)
             .child(self.nav_page_entry(
                 "nav.add-server",

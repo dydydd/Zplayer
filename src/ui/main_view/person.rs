@@ -11,6 +11,7 @@
 //! 一次性写入 `MainView::person`；渲染只借用 `&PersonPayload`，头像复用详情页
 //! 演员卡使用的 `person:{id}` 图片缓存键（通常已经命中）。
 
+use super::components::{RADIUS_MD, SPACING_S, SPACING_XL};
 use super::state::MainView;
 use crate::models::PersonPayload;
 use gpui_kit::{
@@ -19,8 +20,8 @@ use gpui_kit::{
 
 /// 人物头像直径（逻辑 px）。
 const AVATAR_SIZE: f32 = 120.0;
-/// 人物头卡圆角。
-const CARD_RADIUS: f32 = 8.0;
+/// 人物头卡圆角（borderRadiusLarge）。
+const CARD_RADIUS: f32 = RADIUS_MD;
 /// 简介最大行宽，避免超长简介铺满整屏。
 const OVERVIEW_MAX_WIDTH: f32 = 720.0;
 
@@ -83,7 +84,7 @@ impl MainView {
         let mut details = div()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap(px(SPACING_S))
             .min_w_0()
             .child(
                 div()
@@ -114,12 +115,12 @@ impl MainView {
             .flex()
             .flex_row()
             .items_center()
-            .gap_5()
+            .gap(px(SPACING_XL))
             .bg(theme.bg_card)
             .rounded(px(CARD_RADIUS))
             .border_1()
             .border_color(theme.border)
-            .p_5()
+            .p(px(SPACING_XL))
             .child(avatar)
             .child(details)
             .into_any_element()

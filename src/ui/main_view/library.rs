@@ -9,15 +9,17 @@
 //! 顶栏标题由 `navigation.rs` 取 `selected_library_name`；内容只借用
 //! `MainView::library`，点击闭包只捕获 `Copy` 的排序枚举与 `Entity`。
 
-use super::components::{FluentButtonVariant, fluent_button, fluent_empty_state};
+use super::components::{
+    FluentButtonVariant, SPACING_L, SPACING_S, SPACING_XL, fluent_button, fluent_empty_state,
+};
 use super::state::{LibrarySort, MainView};
-use gpui_kit::{AnyElement, Context, SharedString, div, prelude::*};
+use gpui_kit::{AnyElement, Context, SharedString, div, px, prelude::*};
 
 impl MainView {
     /// 渲染媒体库浏览页。
     pub(crate) fn library_content(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme();
-        let mut root = div().w_full().flex().flex_col().gap_5();
+        let mut root = div().w_full().flex().flex_col().gap(px(SPACING_XL));
         if let Some(banner) = self.page_error_banner() {
             root = root.child(banner);
         }
@@ -39,7 +41,7 @@ impl MainView {
                 .w_full()
                 .flex()
                 .flex_wrap()
-                .gap_4()
+                .gap(px(SPACING_L))
                 .children(library.items.iter().map(|item| self.poster_card(item, cx))),
         );
 
@@ -68,7 +70,7 @@ impl MainView {
 
     /// 排序 pill 行：点击切换排序并重新拉取（闭包只捕获 `Copy` 的 `LibrarySort`）。
     fn library_sort_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mut row = div().flex().flex_row().items_center().gap_2();
+        let mut row = div().flex().flex_row().items_center().gap(px(SPACING_S));
         for sort in LibrarySort::ALL {
             let selected = self.library_sort == sort;
             row = row.child(self.selectable_pill(
